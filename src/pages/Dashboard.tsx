@@ -28,8 +28,8 @@ export default function Dashboard() {
   const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
-    const [params] = searchParams;
-    if (params.get('demo') === 'true') {
+    const params = searchParams[0];
+    if (params && params.get('demo') === 'true') {
       setNiche('car detailing');
       setState('Virginia');
       setCity('Richmond');
