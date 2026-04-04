@@ -2,7 +2,7 @@ import { BusinessLead } from '@/types';
 import { Phone, Mail, Globe, Star, Copy, Check, ExternalLink, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@/lib/navigation';
 
 const statusBadge: Record<string, string> = {
   new: 'bg-info/10 text-info',

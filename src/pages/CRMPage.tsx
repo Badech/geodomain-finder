@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@/lib/navigation';
 import { DragDropContext, Droppable, Draggable, DropResult } from '@hello-pangea/dnd';
 import { Globe, Phone, Mail, Star, ArrowLeft, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from '@/lib/navigation';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Globe, Phone, Mail, MapPin, Star, ExternalLink, Copy, Check, MessageSquare, Tag, Send } from 'lucide-react';
 import { Button } from '@/components/ui/button';

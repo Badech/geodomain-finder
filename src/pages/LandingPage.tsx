@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate } from '@/lib/navigation';
 import { motion } from 'framer-motion';
 import { Search, Globe, Users, BarChart3, ArrowRight, Zap, Shield, TrendingUp, ChevronDown, ChevronUp, Target, Layers, Workflow } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -257,6 +257,8 @@ function FinalCTA() {
 }
 
 export default function LandingPage() {
+  const navigate = useNavigate();
+  
   return (
     <div className="min-h-screen bg-background">
       <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
@@ -270,7 +272,7 @@ export default function LandingPage() {
             <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Pricing</a>
             <a href="#" className="text-sm text-muted-foreground hover:text-foreground transition-colors">Docs</a>
           </nav>
-          <Button size="sm" onClick={() => window.location.href = '/dashboard'}>Get Started</Button>
+          <Button size="sm" onClick={() => navigate('/dashboard')}>Get Started</Button>
         </div>
       </header>
       <HeroSection />

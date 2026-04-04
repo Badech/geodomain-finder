@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from '@/lib/navigation';
 import { motion } from 'framer-motion';
 import { Search, SlidersHorizontal, Globe, Users, TrendingUp, Bookmark, X, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -28,12 +28,14 @@ export default function Dashboard() {
   const [hasSearched, setHasSearched] = useState(false);
 
   useEffect(() => {
-    if (searchParams.get('demo') === 'true') {
+    const [params] = searchParams;
+    if (params.get('demo') === 'true') {
       setNiche('car detailing');
       setState('Virginia');
       setCity('Richmond');
       handleSearch('car detailing', 'Virginia', 'Richmond');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const handleSearch = async (n?: string, s?: string, c?: string) => {
