@@ -1,0 +1,121 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model SearchQuery {
+  id        String   @id @default(cuid())
+  niche     String
+  state     String
+  city      String
+  modifiers String[] @default([])
+  createdAt DateTime @default(now())
+  
+  domains   DomainOpportunity[]
+  
+  @@index([niche, state, city])
+  @@index([createdAt])
+}
+
+model DomainOpportunity {
+  id            String   @id @default(cuid())
+  domain        String   @unique
+  tld           String   @default(".com")
+  status        String   // 'available', 'taken', 'unknown'
+  qualityScore  Int
+  seoScore      Int
+  resaleScore   Int
+  reasons       Json     // Array of strings
+  saved         Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  
+  searchQueryId String
+  searchQuery   SearchQuery @relation(fields: [searchQueryId], references: [id], onDelete: Cascade)
+  
+  matches       OpportunityMatch[]
+  
+  @@index([status])
+  @@index([saved])
+  @@index([searchQueryId])
+  @@index([createdAt])
+}
+
+model BusinessLead {
+  id              String   @id @default(cuid())
+  placeId         String?  @unique // Google Places ID for deduplication
+  name            String
+  niche           String
+  city            String
+  state           String
+  phone           String?
+  email           String?
+  website         String?
+  address         String
+  rating          Float    @default(0)
+  reviewCount     Int      @default(0)
+  currentDomain   String?
+  buyerScore      Int      @default(0)
+  status          String   @default("new") // 'new', 'saved', 'contacted', 'interested', 'follow-up', 'closed'
+  tags            Json     @default("[]") // Array of strings
+  notes           String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+  
+  matches         OpportunityMatch[]
+  activityNotes   ActivityNote[]
+  
+  @@index([status])
+  @@index([niche, city, state])
+  @@index([buyerScore])
+  @@index([placeId])
+  @@index([createdAt])
+}
+
+model OpportunityMatch {
+  id                  String   @id @default(cuid())
+  fitScore            Int
+  reasons             Json     // Array of strings
+  matchReason         String?  // Main reason text
+  createdAt           DateTime @default(now())
+  
+  businessLeadId      String
+  businessLead        BusinessLead @relation(fields: [businessLeadId], references: [id], onDelete: Cascade)
+  
+  domainOpportunityId String
+  domainOpportunity   DomainOpportunity @relation(fields: [domainOpportunityId], references: [id], onDelete: Cascade)
+  
+  @@unique([businessLeadId, domainOpportunityId])
+  @@index([fitScore])
+  @@index([businessLeadId])
+  @@index([domainOpportunityId])
+}
+
+model ActivityNote {
+  id             String   @id @default(cuid())
+  content        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  
+  businessLeadId String
+  businessLead   BusinessLead @relation(fields: [businessLeadId], references: [id], onDelete: Cascade)
+  
+  @@index([businessLeadId])
+  @@index([createdAt])
+}
+
+model SavedFilter {
+  id        String   @id @default(cuid())
+  name      String
+  filters   Json     // Saved filter configuration
+  createdAt DateTime @default(now())
+  
+  @@index([createdAt])
+}
