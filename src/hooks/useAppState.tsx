@@ -1,7 +1,3 @@
-import { create } from 'zustand';
-// We'll use React state instead of zustand since it's not installed
-// Using a simple context-based store
-
 import { createContext, useContext, useState, useCallback, ReactNode } from 'react';
 import { DomainOpportunity, BusinessLead, SearchQuery, ActivityNote, LeadStatus, SearchFilters, DEFAULT_FILTERS } from '@/types';
 
