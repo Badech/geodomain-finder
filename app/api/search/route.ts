@@ -167,6 +167,7 @@ export async function POST(request: NextRequest) {
         ...result.metadata,
         persistedAt: new Date().toISOString(),
         cached: false,
+        cacheHit: false,
       },
     });
   });
