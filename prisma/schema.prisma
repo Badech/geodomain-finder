@@ -104,6 +104,11 @@ model OpportunityMatch {
 model ActivityNote {
   id             String   @id @default(cuid())
   content        String
+  type           String   @default("note") // 'note', 'call', 'email', 'meeting', 'follow-up'
+  actionType     String?  // 'call', 'email', 'save-for-later', 'high-priority', 'follow-up'
+  followUpDate   DateTime? // When to follow up
+  completed      Boolean  @default(false) // For action items
+  priority       String   @default("normal") // 'low', 'normal', 'high', 'urgent'
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
   
@@ -112,6 +117,9 @@ model ActivityNote {
   
   @@index([businessLeadId])
   @@index([createdAt])
+  @@index([type])
+  @@index([followUpDate])
+  @@index([completed])
 }
 
 model SavedFilter {
