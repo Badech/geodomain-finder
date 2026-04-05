@@ -9,7 +9,7 @@ import { Switch } from '@/components/ui/switch';
 import { DomainCard } from '@/components/DomainCard';
 import { BusinessCard, BusinessTable } from '@/components/BusinessCard';
 import { useAppState } from '@/hooks/useAppState';
-import { searchDomains, searchBusinesses } from '@/services/searchService';
+import { executeSearch } from '@/services/searchService';
 import { US_STATES } from '@/data/mockData';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -55,14 +55,24 @@ export default function Dashboard() {
       createdAt: new Date(),
     });
 
-    const [domainResults, businessResults] = await Promise.all([
-      searchDomains(searchNiche, searchState, searchCity),
-      searchBusinesses(searchNiche, searchState, searchCity),
-    ]);
-
-    setDomains(domainResults);
-    setBusinesses(businessResults);
-    setIsSearching(false);
+    try {
+      const result = await executeSearch(searchNiche, searchState, searchCity);
+      setDomains(result.domains);
+      setBusinesses(result.businesses);
+      console.log('Search completed:', {
+        domains: result.domains.length,
+        businesses: result.businesses.length,
+        matches: result.matches.length,
+        executionTime: result.metadata.executionTime + 'ms'
+      });
+    } catch (error) {
+      console.error('Search failed:', error);
+      // Show error to user but keep UI functional
+      setDomains([]);
+      setBusinesses([]);
+    } finally {
+      setIsSearching(false);
+    }
   };
 
   const availableDomains = domains.filter(d => d.status === 'available');

@@ -36,15 +36,45 @@ export function AppProvider({ children }: { children: ReactNode }) {
     setSearchHistory(prev => [q, ...prev.slice(0, 9)]);
   }, []);
 
-  const toggleSaveDomain = useCallback((id: string) => {
+  const toggleSaveDomain = useCallback(async (id: string) => {
+    // Optimistic update
     setDomains(prev => prev.map(d => d.id === id ? { ...d, saved: !d.saved } : d));
+    
+    // Persist to API
+    try {
+      await fetch(`/api/domains/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ saved: true }), // API will toggle
+      });
+    } catch (error) {
+      console.error('Failed to save domain:', error);
+      // Revert on error
+      setDomains(prev => prev.map(d => d.id === id ? { ...d, saved: !d.saved } : d));
+    }
   }, []);
 
-  const updateLeadStatus = useCallback((id: string, status: LeadStatus) => {
+  const updateLeadStatus = useCallback(async (id: string, status: LeadStatus) => {
+    // Optimistic update
+    const previousBusinesses = businesses;
     setBusinesses(prev => prev.map(b => b.id === id ? { ...b, status } : b));
-  }, []);
+    
+    // Persist to API
+    try {
+      await fetch(`/api/leads/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ status }),
+      });
+    } catch (error) {
+      console.error('Failed to update lead status:', error);
+      // Revert on error
+      setBusinesses(previousBusinesses);
+    }
+  }, [businesses]);
 
-  const addNote = useCallback((businessId: string, content: string) => {
+  const addNote = useCallback(async (businessId: string, content: string) => {
+    // Create optimistic note
     const note: ActivityNote = {
       id: `note-${Date.now()}`,
       businessLeadId: businessId,
@@ -52,6 +82,19 @@ export function AppProvider({ children }: { children: ReactNode }) {
       createdAt: new Date(),
     };
     setActivityNotes(prev => [note, ...prev]);
+    
+    // Persist to API
+    try {
+      await fetch('/api/notes', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ businessLeadId: businessId, content }),
+      });
+    } catch (error) {
+      console.error('Failed to create note:', error);
+      // Remove optimistic note on error
+      setActivityNotes(prev => prev.filter(n => n.id !== note.id));
+    }
   }, []);
 
   const updateBusiness = useCallback((id: string, updates: Partial<BusinessLead>) => {
