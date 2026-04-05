@@ -66,6 +66,9 @@ model BusinessLead {
   status          String   @default("new") // 'new', 'saved', 'contacted', 'interested', 'follow-up', 'closed'
   tags            Json     @default("[]") // Array of strings
   notes           String   @default("")
+  // Phase 3: Map coordinates
+  latitude        Float?   // Latitude from Google Places location
+  longitude       Float?   // Longitude from Google Places location
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
   

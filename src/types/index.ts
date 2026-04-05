@@ -63,6 +63,9 @@ export interface BusinessLead {
   // Phase 2 website audit
   websiteScore?: number;
   websiteInsights?: string[];
+  // Phase 3 map coordinates
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface CurrentDomainAnalysis {

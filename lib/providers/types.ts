@@ -32,6 +32,9 @@ export interface BusinessLeadSeed {
   website?: string;
   rating?: number;
   reviewCount?: number;
+  // Phase 3: Coordinates for map
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface BusinessLeadDetails extends BusinessLeadSeed {

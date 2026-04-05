@@ -112,6 +112,10 @@ export class GooglePlacesProvider extends BaseLeadProvider {
   }
 
   private mapToBusinessLeadSeed(place: any, city: string, state: string): BusinessLeadSeed {
+    // Extract location coordinates if available
+    const latitude = place.location?.latitude;
+    const longitude = place.location?.longitude;
+    
     return {
       placeId: place.id,
       name: place.displayName?.text || 'Unknown Business',
@@ -122,6 +126,9 @@ export class GooglePlacesProvider extends BaseLeadProvider {
       website: place.websiteUri ? this.extractDomain(place.websiteUri) : undefined,
       rating: place.rating || undefined,
       reviewCount: place.userRatingCount || undefined,
+      // Phase 3: Add coordinates for map
+      latitude: latitude !== undefined ? latitude : undefined,
+      longitude: longitude !== undefined ? longitude : undefined,
     };
   }
 
@@ -131,6 +138,11 @@ export class GooglePlacesProvider extends BaseLeadProvider {
     const state = this.extractAddressComponent(addressComponents, 'administrative_area_level_1') || '';
 
     const website = place.websiteUri;
+    
+    // Extract location coordinates if available
+    const latitude = place.location?.latitude;
+    const longitude = place.location?.longitude;
+    
     const details: BusinessLeadDetails = {
       placeId: place.id,
       name: place.displayName?.text || 'Unknown Business',
@@ -142,6 +154,9 @@ export class GooglePlacesProvider extends BaseLeadProvider {
       currentDomain: website ? this.extractDomain(website) : undefined,
       rating: place.rating || undefined,
       reviewCount: place.userRatingCount || undefined,
+      // Phase 3: Add coordinates for map
+      latitude: latitude !== undefined ? latitude : undefined,
+      longitude: longitude !== undefined ? longitude : undefined,
     };
 
     // Add business hours if available
