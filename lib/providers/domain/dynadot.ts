@@ -107,7 +107,7 @@ export class DynadotDomainProvider extends BaseDomainProvider {
     }
 
     // Parse each domain result
-    const domainInfoRegex = /<DomainInfo>(.*?)<\/DomainInfo>/gs;
+    const domainInfoRegex = /<DomainInfo>([\s\S]*?)<\/DomainInfo>/g;
     const matches = Array.from(xmlText.matchAll(domainInfoRegex));
 
     if (matches.length === 0) {
