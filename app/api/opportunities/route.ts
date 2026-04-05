@@ -68,7 +68,13 @@ export async function POST(request: NextRequest) {
     const body = await parseRequestBody<CreateOpportunityRequest>(request, createOpportunitySchema);
     logRequest('POST', '/api/opportunities', body);
 
-    const opportunity = await createOpportunity(body);
+    const opportunity = await createOpportunity({
+      domainId: body.domainId,
+      businessLeadId: body.businessLeadId,
+      fitScore: body.fitScore,
+      reasons: body.reasons,
+      matchReason: body.matchReason,
+    });
 
     const duration = Date.now() - startTime;
     logResponse('POST', '/api/opportunities', 201, duration);
