@@ -1,6 +1,6 @@
 'use client';
 
-import CRMPage from '@/pages/CRMPage';
+import CRMPage from '@/components-pages/CRMPage';
 
 export const dynamic = 'force-dynamic';
 

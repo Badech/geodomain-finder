@@ -1,6 +1,6 @@
 'use client';
 
-import ProspectDetail from '@/pages/ProspectDetail';
+import ProspectDetail from '@/components-pages/ProspectDetail';
 
 export const dynamic = 'force-dynamic';
 
