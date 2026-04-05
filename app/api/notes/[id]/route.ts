@@ -17,7 +17,7 @@ import {
 } from '../../../../lib/api/utils';
 
 const updateNoteSchema = z.object({
-  content: z.string().min(1),
+  content: z.string().min(1).max(5000),
 });
 
 type UpdateNoteRequest = z.infer<typeof updateNoteSchema>;
