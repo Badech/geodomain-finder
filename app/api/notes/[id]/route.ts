@@ -38,7 +38,7 @@ export async function PATCH(
       return createErrorResponse('Note not found', 404, 'NOT_FOUND');
     }
 
-    const updated = await updateNote(params.id, body);
+    const updated = await updateNote(params.id, { content: body.content });
 
     const duration = Date.now() - startTime;
     logResponse('PATCH', `/api/notes/${params.id}`, 200, duration);
