@@ -106,8 +106,15 @@ export class Logger {
    * Log API response
    */
   logResponse(method: string, path: string, statusCode: number, duration: number): void {
-    const level = statusCode >= 500 ? 'error' : statusCode >= 400 ? 'warn' : 'info';
-    this[level]('API Response', { method, path, statusCode, duration });
+    const data = { method, path, statusCode, duration };
+    
+    if (statusCode >= 500) {
+      this.error('API Response', undefined, data);
+    } else if (statusCode >= 400) {
+      this.warn('API Response', data);
+    } else {
+      this.info('API Response', data);
+    }
   }
 
   /**
