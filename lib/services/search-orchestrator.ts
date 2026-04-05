@@ -368,17 +368,4 @@ export class CachedSearchOrchestrator extends SearchOrchestrator {
     }
   }
 
-  /**
-   * Report progress (override to access private method)
-   */
-  private reportProgress(
-    callback: ProgressCallback | undefined,
-    stage: SearchProgress['stage'],
-    message: string,
-    progress: number
-  ): void {
-    if (callback) {
-      callback({ stage, message, progress });
-    }
-  }
 }
