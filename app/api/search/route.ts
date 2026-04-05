@@ -17,6 +17,7 @@ import {
 } from '../../../lib/api/utils';
 import { db } from '../../../lib/db';
 import { searchRateLimiter, getClientIdentifier, createRateLimitResponse } from '../../../lib/api/rate-limit';
+import { globalSearchCache } from '../../../lib/cache/search-cache';
 
 // Request validation schema with sanitization
 const searchRequestSchema = z.object({
@@ -64,6 +65,50 @@ export async function POST(request: NextRequest) {
     const body = await parseRequestBody<SearchRequest>(request, searchRequestSchema);
     logRequest('POST', '/api/search', body);
 
+    // PHASE 4: Check cache first for faster responses
+    const cachedResult = globalSearchCache.get({
+      niche: body.niche,
+      city: body.city,
+      state: body.state,
+      modifiers: body.modifiers,
+    });
+
+    if (cachedResult) {
+      console.log('✅ Returning cached search result');
+      const duration = Date.now() - startTime;
+      logResponse('POST', '/api/search', 200, duration);
+      
+      return createSuccessResponse({
+        ...cachedResult,
+        businesses: cachedResult.businesses.map(b => ({
+          id: b.id,
+          name: b.name,
+          niche: body.niche,
+          city: b.city,
+          state: b.state,
+          phone: b.phone,
+          email: b.email,
+          website: b.website,
+          address: b.address,
+          rating: b.rating,
+          reviewCount: b.reviewCount,
+          currentDomain: b.currentDomain,
+          buyerScore: b.buyerScore,
+          status: 'new',
+          tags: b.tags || [],
+        })),
+        metadata: {
+          ...cachedResult.metadata,
+          cached: true,
+          cacheHit: true,
+        },
+      });
+    }
+
+    // PHASE 4: Apply request limits for smart enrichment
+    const maxDomains = Math.min(body.maxDomains || 20, 30); // Cap at 30
+    const maxBusinesses = Math.min(body.maxBusinesses || 20, 30); // Cap at 30
+
     // Initialize providers and orchestrator
     const { domainProvider, leadProvider, emailExtractor } = initializeProviders();
     const orchestrator = new SearchOrchestrator(domainProvider, leadProvider, emailExtractor);
@@ -74,10 +119,68 @@ export async function POST(request: NextRequest) {
       city: body.city,
       state: body.state,
       modifiers: body.modifiers,
-      maxDomains: body.maxDomains,
-      maxBusinesses: body.maxBusinesses,
+      maxDomains,
+      maxBusinesses,
     });
 
+    // PHASE 4: Cache the result
+    globalSearchCache.set({
+      niche: body.niche,
+      city: body.city,
+      state: body.state,
+      modifiers: body.modifiers,
+    }, result);
+
+    // PHASE 4 OPTIMIZATION: Persist to database in background (non-blocking)
+    // Don't wait for database writes - return results immediately
+    persistSearchResultsInBackground(body, result).catch(error => {
+      console.error('Background persistence failed:', error);
+      // Log but don't fail the request
+    });
+
+    // Return response immediately for faster UI updates
+    const duration = Date.now() - startTime;
+    logResponse('POST', '/api/search', 200, duration);
+
+    return createSuccessResponse({
+      searchQueryId: result.searchQueryId,
+      domains: result.domains,
+      businesses: result.businesses.map(b => ({
+        id: b.id,
+        name: b.name,
+        niche: body.niche,
+        city: b.city,
+        state: b.state,
+        phone: b.phone,
+        email: b.email,
+        website: b.website,
+        address: b.address,
+        rating: b.rating,
+        reviewCount: b.reviewCount,
+        currentDomain: b.currentDomain,
+        buyerScore: b.buyerScore,
+        status: 'new',
+        tags: b.tags || [],
+      })),
+      matches: result.matches,
+      metadata: {
+        ...result.metadata,
+        persistedAt: new Date().toISOString(),
+        cached: false,
+      },
+    });
+  });
+}
+
+/**
+ * PHASE 4: Background persistence - doesn't block API response
+ * Persists search results to database asynchronously
+ */
+async function persistSearchResultsInBackground(
+  body: SearchRequest,
+  result: any
+): Promise<void> {
+  try {
     // Persist search query to database
     const searchQuery = await db.searchQuery.create({
       data: {
@@ -89,7 +192,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Persist domains to database
-    const domainPromises = result.domains.map(domain =>
+    const domainPromises = result.domains.map((domain: any) =>
       db.domainOpportunity.upsert({
         where: { domain: domain.domain },
         create: {
@@ -115,7 +218,7 @@ export async function POST(request: NextRequest) {
     const savedDomains = await Promise.all(domainPromises);
 
     // Persist business leads to database
-    const businessPromises = result.businesses.map(business =>
+    const businessPromises = result.businesses.map((business: any) =>
       db.businessLead.upsert({
         where: { placeId: business.id },
         create: {
@@ -147,7 +250,7 @@ export async function POST(request: NextRequest) {
     const savedBusinesses = await Promise.all(businessPromises);
 
     // Persist matches to database
-    const matchPromises = result.matches.map(async (match) => {
+    const matchPromises = result.matches.map(async (match: any) => {
       const domain = savedDomains.find(d => d.domain === match.domain);
       const business = savedBusinesses.find(b => b.placeId === match.businessLeadId);
 
@@ -176,36 +279,8 @@ export async function POST(request: NextRequest) {
     });
 
     await Promise.all(matchPromises.filter(Boolean));
-
-    // Return response matching UI expectations
-    const duration = Date.now() - startTime;
-    logResponse('POST', '/api/search', 200, duration);
-
-    return createSuccessResponse({
-      searchQueryId: searchQuery.id,
-      domains: result.domains,
-      businesses: result.businesses.map(b => ({
-        id: b.id,
-        name: b.name,
-        niche: body.niche,
-        city: b.city,
-        state: b.state,
-        phone: b.phone,
-        email: b.email,
-        website: b.website,
-        address: b.address,
-        rating: b.rating,
-        reviewCount: b.reviewCount,
-        currentDomain: b.currentDomain,
-        buyerScore: b.buyerScore,
-        status: 'new',
-        tags: b.tags || [],
-      })),
-      matches: result.matches,
-      metadata: {
-        ...result.metadata,
-        persistedAt: new Date().toISOString(),
-      },
-    });
-  });
+  } catch (error) {
+    console.error('Background persistence error:', error);
+    throw error;
+  }
 }

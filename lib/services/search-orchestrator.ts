@@ -132,21 +132,35 @@ export class SearchOrchestrator {
         maxResults: input.maxDomains || 20,
       });
 
-      // Stage 3: Check domain availability (parallel)
+      // Stage 3 & 4: Check domains AND search businesses IN PARALLEL (Phase 4 optimization)
       this.reportProgress(onProgress, 'checking', 'Checking domain availability...', 30);
-      const domains = await this.checkDomainAvailability(domainCandidates);
-
-      // Stage 4: Search for businesses
-      this.reportProgress(onProgress, 'searching', 'Searching for businesses...', 50);
-      const businesses = await this.searchBusinesses(input);
+      
+      // Run domain availability and business search concurrently for speed
+      const [domains, businesses] = await Promise.all([
+        this.checkDomainAvailability(domainCandidates),
+        this.searchBusinesses(input),
+      ]);
+      
+      this.reportProgress(onProgress, 'searching', 'Processing results...', 50);
 
       // Stage 5: Score businesses
       this.reportProgress(onProgress, 'searching', 'Analyzing businesses...', 60);
       const scoredBusinesses = scoreBusinessLeads(businesses);
 
-      // Stage 6: Enrich business data with emails (rate-limited)
-      this.reportProgress(onProgress, 'enriching', 'Enriching business data...', 70);
-      const enrichedBusinesses = await this.enrichBusinessData(scoredBusinesses);
+      // Stage 6: Enrich ONLY top businesses (Phase 4 optimization - smart enrichment)
+      this.reportProgress(onProgress, 'enriching', 'Enriching top prospects...', 70);
+      
+      // Only enrich top 10 businesses to speed up initial results
+      const topBusinesses = scoredBusinesses.slice(0, 10);
+      const remainingBusinesses = scoredBusinesses.slice(10);
+      
+      const enrichedTop = await this.enrichBusinessData(topBusinesses);
+      
+      // Remaining businesses stay unenriched (can be enriched on demand later)
+      const enrichedBusinesses = [
+        ...enrichedTop,
+        ...remainingBusinesses.map(b => ({ ...b } as EnrichedBusinessLead))
+      ];
 
       // Stage 7: Match domains to businesses
       this.reportProgress(onProgress, 'matching', 'Matching domains to businesses...', 85);
@@ -301,79 +315,111 @@ export class SearchOrchestrator {
   /**
    * Enrich business data with email extraction
    */
+  /**
+   * PHASE 4 OPTIMIZATION: Parallel enrichment with concurrency control
+   * Enriches businesses in parallel batches instead of sequential
+   */
   private async enrichBusinessData(
     businesses: ScoredBusinessLead[]
   ): Promise<EnrichedBusinessLead[]> {
+    const CONCURRENCY_LIMIT = 5; // Process 5 businesses at a time
     const enriched: EnrichedBusinessLead[] = [];
     
-    for (const business of businesses) {
-      const enrichedBusiness: EnrichedBusinessLead = { ...business };
+    // Process in batches for better performance
+    for (let i = 0; i < businesses.length; i += CONCURRENCY_LIMIT) {
+      const batch = businesses.slice(i, i + CONCURRENCY_LIMIT);
       
-      // Only attempt enrichment if business has a website
-      if (business.website) {
-        try {
-          // Email extraction
-          const emailResult = await this.emailExtractor.extractPublicEmails(business.website);
-          
-          enrichedBusiness.emailEnrichment = {
-            email: emailResult.email,
-            source: emailResult.source,
-            confidence: emailResult.confidence,
-            classification: emailResult.classification,
-            sourceType: emailResult.sourceType,
-          };
-          
-          // Update email field if found
-          if (emailResult.email) {
-            enrichedBusiness.email = emailResult.email;
-          }
-          
-          // Website audit (Phase 2)
-          try {
-            const { auditWebsite, generateAuditInsights } = await import('./website-audit');
-            const auditResult = await auditWebsite(business.website, {
-              city: business.city,
-              state: business.state,
-              niche: business.niche,
-              businessName: business.name,
-            });
-            
-            enrichedBusiness.websiteAudit = {
-              score: auditResult.score,
-              signals: {
-                hasHttps: auditResult.signals.hasHttps,
-                domainLength: auditResult.signals.domainLength,
-                hasGeoKeyword: auditResult.signals.hasGeoKeyword,
-                hasServiceKeyword: auditResult.signals.hasServiceKeyword,
-                isGeneric: auditResult.signals.isGeneric,
-                isBranded: auditResult.signals.isBranded,
-                possiblePlatform: auditResult.signals.possiblePlatform,
-                possibleAge: auditResult.signals.possibleAge,
-              },
-              insights: generateAuditInsights(auditResult, {
-                city: business.city,
-                state: business.state,
-                niche: business.niche,
-                businessName: business.name,
-              }),
-            };
-          } catch (auditError) {
-            console.error(`Website audit failed for ${business.name}:`, auditError);
-            // Continue without audit
-          }
-          
-          // Small delay between requests to be respectful
-          await this.delay(300);
-        } catch (error) {
-          console.error(`Enrichment failed for ${business.name}:`, error);
-          // Continue without enrichment
-        }
-      }
+      const batchResults = await Promise.all(
+        batch.map(business => this.enrichSingleBusiness(business))
+      );
       
-      enriched.push(enrichedBusiness);
+      enriched.push(...batchResults);
     }
     
     return enriched;
+  }
+
+  /**
+   * PHASE 4: Enriches a single business with email and website audit
+   */
+  private async enrichSingleBusiness(business: ScoredBusinessLead): Promise<EnrichedBusinessLead> {
+    const enrichedBusiness: EnrichedBusinessLead = { ...business };
+    
+    // Only attempt enrichment if business has a website
+    if (!business.website) {
+      return enrichedBusiness;
+    }
+
+    try {
+      // Run email extraction and website audit in parallel
+      const [emailResult, auditResult] = await Promise.allSettled([
+        this.emailExtractor.extractPublicEmails(business.website),
+        this.auditWebsiteIfAvailable(business),
+      ]);
+
+      // Process email result
+      if (emailResult.status === 'fulfilled') {
+        enrichedBusiness.emailEnrichment = {
+          email: emailResult.value.email,
+          source: emailResult.value.source,
+          confidence: emailResult.value.confidence,
+          classification: emailResult.value.classification,
+          sourceType: emailResult.value.sourceType,
+        };
+        
+        if (emailResult.value.email) {
+          enrichedBusiness.email = emailResult.value.email;
+        }
+      }
+
+      // Process audit result
+      if (auditResult.status === 'fulfilled' && auditResult.value) {
+        enrichedBusiness.websiteAudit = auditResult.value;
+      }
+    } catch (error) {
+      console.error(`Enrichment failed for ${business.name}:`, error);
+      // Continue without enrichment
+    }
+    
+    return enrichedBusiness;
+  }
+
+  /**
+   * PHASE 4: Helper to audit website with proper error handling
+   */
+  private async auditWebsiteIfAvailable(business: ScoredBusinessLead): Promise<any | null> {
+    try {
+      const { auditWebsite, generateAuditInsights } = await import('./website-audit');
+      const auditResult = await auditWebsite(business.website!, {
+        city: business.city,
+        state: business.state,
+        niche: business.niche,
+        businessName: business.name,
+      });
+      
+      return {
+        score: auditResult.score,
+        signals: {
+          hasHttps: auditResult.signals.hasHttps,
+          domainLength: auditResult.signals.domainLength,
+          hasGeoKeyword: auditResult.signals.hasGeoKeyword,
+          hasServiceKeyword: auditResult.signals.hasServiceKeyword,
+          isGeneric: auditResult.signals.isGeneric,
+          isBranded: auditResult.signals.isBranded,
+          possiblePlatform: auditResult.signals.possiblePlatform,
+          possibleAge: auditResult.signals.possibleAge,
+        },
+        insights: generateAuditInsights(auditResult, {
+          city: business.city,
+          state: business.state,
+          niche: business.niche,
+          businessName: business.name,
+        }),
+      };
+    } catch (error) {
+      console.error(`Website audit failed for ${business.name}:`, error);
+      return null;
+    }
   }
 
   /**

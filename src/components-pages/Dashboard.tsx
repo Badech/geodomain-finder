@@ -131,11 +131,32 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Loading */}
+        {/* Loading - PHASE 4: Enhanced loading states */}
         {isSearching && (
           <div className="mt-12 flex flex-col items-center justify-center gap-4">
             <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Generating domains and finding prospects...</p>
+            <div className="text-center">
+              <p className="text-sm font-medium text-foreground">Searching...</p>
+              <p className="mt-1 text-xs text-muted-foreground">Generating domains, finding businesses, and enriching data</p>
+            </div>
+            <div className="mt-4 max-w-md space-y-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse"></div>
+                <span>Checking domain availability</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.2s' }}></div>
+                <span>Searching local businesses via Google Places</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.4s' }}></div>
+                <span>Extracting contact information</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.6s' }}></div>
+                <span>Matching domains to prospects</span>
+              </div>
+            </div>
           </div>
         )}
 
