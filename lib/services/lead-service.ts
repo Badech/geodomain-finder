@@ -263,7 +263,7 @@ export async function addLeadTags(leadId: string, tags: string[]) {
     throw new Error('Lead not found');
   }
 
-  const currentTags = Array.isArray(lead.tags) ? lead.tags : [];
+  const currentTags = Array.isArray(lead.tags) ? lead.tags as string[] : [];
   const newTags = [...new Set([...currentTags, ...tags])];
 
   return await db.businessLead.update({

@@ -252,10 +252,6 @@ export async function batchUpsertDomains(
           reasons: domain.reasons,
         },
       })
-    ),
-    {
-      maxWait: 10000, // 10 seconds max wait
-      timeout: 30000, // 30 seconds timeout
-    }
+    )
   );
 }
