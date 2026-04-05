@@ -284,7 +284,7 @@ export async function removeLeadTags(leadId: string, tags: string[]) {
     throw new Error('Lead not found');
   }
 
-  const currentTags = Array.isArray(lead.tags) ? lead.tags : [];
+  const currentTags = Array.isArray(lead.tags) ? lead.tags as string[] : [];
   const newTags = currentTags.filter(tag => !tags.includes(tag));
 
   return await db.businessLead.update({
