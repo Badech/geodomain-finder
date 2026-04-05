@@ -50,6 +50,8 @@ export interface EnrichedBusinessLead extends ScoredBusinessLead {
     email: string | null;
     source: string | null;
     confidence: 'high' | 'medium' | 'low' | null;
+    classification?: 'role-based' | 'personal' | 'free-provider' | 'undeliverable';
+    sourceType?: 'mailto' | 'contact-page' | 'about-page' | 'homepage' | 'footer';
   };
   // Phase 1 enhancements from matching
   recommendedDomain?: string;
@@ -61,6 +63,21 @@ export interface EnrichedBusinessLead extends ScoredBusinessLead {
     weaknesses: string[];
     strengths: string[];
     overallScore: number;
+  };
+  // Phase 2 enhancements
+  websiteAudit?: {
+    score: number;
+    signals: {
+      hasHttps: boolean;
+      domainLength: number;
+      hasGeoKeyword: boolean;
+      hasServiceKeyword: boolean;
+      isGeneric: boolean;
+      isBranded: boolean;
+      possiblePlatform?: string;
+      possibleAge?: string;
+    };
+    insights: string[];
   };
 }
 
@@ -292,15 +309,18 @@ export class SearchOrchestrator {
     for (const business of businesses) {
       const enrichedBusiness: EnrichedBusinessLead = { ...business };
       
-      // Only attempt email extraction if business has a website
+      // Only attempt enrichment if business has a website
       if (business.website) {
         try {
+          // Email extraction
           const emailResult = await this.emailExtractor.extractPublicEmails(business.website);
           
           enrichedBusiness.emailEnrichment = {
             email: emailResult.email,
             source: emailResult.source,
             confidence: emailResult.confidence,
+            classification: emailResult.classification,
+            sourceType: emailResult.sourceType,
           };
           
           // Update email field if found
@@ -308,11 +328,45 @@ export class SearchOrchestrator {
             enrichedBusiness.email = emailResult.email;
           }
           
+          // Website audit (Phase 2)
+          try {
+            const { auditWebsite, generateAuditInsights } = await import('./website-audit');
+            const auditResult = await auditWebsite(business.website, {
+              city: business.city,
+              state: business.state,
+              niche: business.niche,
+              businessName: business.name,
+            });
+            
+            enrichedBusiness.websiteAudit = {
+              score: auditResult.score,
+              signals: {
+                hasHttps: auditResult.signals.hasHttps,
+                domainLength: auditResult.signals.domainLength,
+                hasGeoKeyword: auditResult.signals.hasGeoKeyword,
+                hasServiceKeyword: auditResult.signals.hasServiceKeyword,
+                isGeneric: auditResult.signals.isGeneric,
+                isBranded: auditResult.signals.isBranded,
+                possiblePlatform: auditResult.signals.possiblePlatform,
+                possibleAge: auditResult.signals.possibleAge,
+              },
+              insights: generateAuditInsights(auditResult, {
+                city: business.city,
+                state: business.state,
+                niche: business.niche,
+                businessName: business.name,
+              }),
+            };
+          } catch (auditError) {
+            console.error(`Website audit failed for ${business.name}:`, auditError);
+            // Continue without audit
+          }
+          
           // Small delay between requests to be respectful
           await this.delay(300);
         } catch (error) {
-          console.error(`Email extraction failed for ${business.name}:`, error);
-          // Continue without email enrichment
+          console.error(`Enrichment failed for ${business.name}:`, error);
+          // Continue without enrichment
         }
       }
       

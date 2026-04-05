@@ -60,6 +60,9 @@ export interface PublicEmailResult {
   source: string | null; // URL where email was found
   confidence: 'high' | 'medium' | 'low' | null;
   foundAt: Date;
+  // Phase 2 enhancements
+  classification?: 'role-based' | 'personal' | 'free-provider' | 'undeliverable';
+  sourceType?: 'mailto' | 'contact-page' | 'about-page' | 'homepage' | 'footer';
 }
 
 export interface EmailExtractorProvider {

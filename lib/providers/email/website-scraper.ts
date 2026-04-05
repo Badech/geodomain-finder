@@ -85,31 +85,49 @@ export class WebsiteScraperEmailExtractor extends BaseEmailExtractor {
 
       const html = await response.text();
       
+      // Determine source type based on URL
+      const sourceType = this.determineSourceType(url, pageType);
+
       // First, look for mailto: links (highest confidence)
       const mailtoEmail = this.extractEmailFromMailto(html);
-      if (mailtoEmail && this.isValidEmail(mailtoEmail) && !this.isGenericEmail(mailtoEmail)) {
+      if (mailtoEmail && this.isValidEmail(mailtoEmail) && this.shouldKeepEmail(mailtoEmail)) {
+        const classification = this.classifyEmail(mailtoEmail);
         return {
           email: mailtoEmail,
           source: url,
           confidence: this.calculateConfidence(mailtoEmail, url, websiteDomain),
           foundAt: new Date(),
+          classification,
+          sourceType: 'mailto',
         };
       }
 
       // Second, extract all emails from page content
       const emails = this.extractEmailsFromText(html);
       
-      // Filter and score emails
+      // Filter and score emails - NOW keeping role-based emails
       const validEmails = emails
         .filter(email => this.isValidEmail(email))
+        .filter(email => this.shouldKeepEmail(email)) // Only filter undeliverable
         .map(email => ({
           email,
           confidence: this.calculateConfidence(email, url, websiteDomain),
-          isGeneric: this.isGenericEmail(email),
+          classification: this.classifyEmail(email),
         }))
-        .filter(item => !item.isGeneric)
         .sort((a, b) => {
-          // Prefer high confidence emails
+          // Prioritize: personal > role-based > free-provider
+          const classificationScore = {
+            'personal': 4,
+            'role-based': 3,
+            'free-provider': 2,
+            'undeliverable': 0,
+          };
+          
+          // First sort by classification
+          const classScore = classificationScore[b.classification] - classificationScore[a.classification];
+          if (classScore !== 0) return classScore;
+          
+          // Then by confidence
           const confidenceScore = { high: 3, medium: 2, low: 1 };
           return confidenceScore[b.confidence] - confidenceScore[a.confidence];
         });
@@ -121,6 +139,8 @@ export class WebsiteScraperEmailExtractor extends BaseEmailExtractor {
           source: url,
           confidence: best.confidence,
           foundAt: new Date(),
+          classification: best.classification,
+          sourceType,
         };
       }
 
@@ -149,5 +169,37 @@ export class WebsiteScraperEmailExtractor extends BaseEmailExtractor {
     } catch {
       return baseUrl + path;
     }
+  }
+
+  /**
+   * Determine the source type based on URL and page type
+   */
+  private determineSourceType(
+    url: string,
+    pageType: string
+  ): 'mailto' | 'contact-page' | 'about-page' | 'homepage' | 'footer' {
+    const lowerUrl = url.toLowerCase();
+    
+    if (lowerUrl.includes('/contact')) {
+      return 'contact-page';
+    }
+    
+    if (lowerUrl.includes('/about')) {
+      return 'about-page';
+    }
+    
+    // Check if it's the homepage (no path or just /)
+    try {
+      const urlObj = new URL(url);
+      if (!urlObj.pathname || urlObj.pathname === '/') {
+        return 'homepage';
+      }
+    } catch {
+      // Ignore parse errors
+    }
+    
+    return pageType === 'contact' ? 'contact-page' : 
+           pageType === 'about' ? 'about-page' : 
+           'homepage';
   }
 }

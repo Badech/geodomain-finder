@@ -44,32 +44,57 @@ export abstract class BaseEmailExtractor implements EmailExtractorProvider {
   }
 
   /**
-   * Check if email is likely a generic/spam email
+   * Classify email type for better categorization
+   * Returns classification instead of just true/false
    */
-  protected isGenericEmail(email: string): boolean {
-    const genericPrefixes = [
-      'noreply', 'no-reply', 'donotreply', 'do-not-reply',
-      'info', 'admin', 'webmaster', 'postmaster',
-      'support', 'help', 'contact', 'sales',
-      'marketing', 'hello', 'hi',
-    ];
-
+  protected classifyEmail(email: string): 'role-based' | 'personal' | 'free-provider' | 'undeliverable' {
     const lowerEmail = email.toLowerCase();
-    
-    // Check for generic prefixes
     const prefix = lowerEmail.split('@')[0];
-    if (genericPrefixes.includes(prefix)) {
-      return true;
+    const domain = lowerEmail.split('@')[1] || '';
+
+    // Undeliverable emails (should never be used)
+    const undeliverablePrefixes = [
+      'noreply', 'no-reply', 'donotreply', 'do-not-reply',
+      'mailer-daemon', 'postmaster', 'webmaster',
+    ];
+    
+    if (undeliverablePrefixes.some(bad => prefix.includes(bad))) {
+      return 'undeliverable';
     }
 
-    // Check for free email providers (these are less valuable for B2B)
-    const freeProviders = [
-      'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
-      'aol.com', 'icloud.com', 'mail.com',
+    // Role-based emails (valid for business contact)
+    const rolePrefixes = [
+      'info', 'contact', 'sales', 'support', 'help',
+      'admin', 'office', 'hello', 'hi', 'team',
+      'service', 'customers', 'business', 'inquiries',
     ];
     
-    const domain = lowerEmail.split('@')[1];
-    return freeProviders.includes(domain);
+    if (rolePrefixes.includes(prefix)) {
+      return 'role-based';
+    }
+
+    // Free email providers (less preferred but still valid)
+    const freeProviders = [
+      'gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com',
+      'aol.com', 'icloud.com', 'mail.com', 'live.com',
+      'googlemail.com', 'ymail.com',
+    ];
+    
+    if (freeProviders.includes(domain)) {
+      return 'free-provider';
+    }
+
+    // Personal/named email (best for B2B outreach)
+    return 'personal';
+  }
+
+  /**
+   * Determine if email should be kept for outreach
+   */
+  protected shouldKeepEmail(email: string): boolean {
+    const classification = this.classifyEmail(email);
+    // Only filter out truly undeliverable emails
+    return classification !== 'undeliverable';
   }
 
   /**

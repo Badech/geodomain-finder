@@ -55,6 +55,14 @@ export interface BusinessLead {
   fitScore?: number; // How well the recommended domain fits this business
   fitReasons?: string[]; // Why this domain is a good fit
   currentDomainAnalysis?: CurrentDomainAnalysis;
+  // Phase 2 email enhancements
+  emailClassification?: 'role-based' | 'personal' | 'free-provider' | 'undeliverable';
+  emailSource?: string;
+  emailSourceType?: 'mailto' | 'contact-page' | 'about-page' | 'homepage' | 'footer';
+  emailConfidence?: 'high' | 'medium' | 'low';
+  // Phase 2 website audit
+  websiteScore?: number;
+  websiteInsights?: string[];
 }
 
 export interface CurrentDomainAnalysis {
