@@ -9,7 +9,9 @@ export interface DomainCandidate {
   qualityScore: number;
   seoScore: number;
   resaleScore: number;
+  naturalnessScore: number; // New: how natural/readable the domain is
   reasons: string[];
+  pattern: string; // Track which pattern generated this domain
 }
 
 export interface DomainGenerationParams {
@@ -186,17 +188,20 @@ function createCandidate(
   pattern: string,
   context: { city: string; niche: string; state: string }
 ): DomainCandidate {
-  const qualityScore = calculateQualityScore(domain, pattern);
+  const naturalnessScore = calculateNaturalnessScore(domain, pattern);
+  const qualityScore = calculateQualityScore(domain, pattern, naturalnessScore);
   const seoScore = calculateSEOScore(domain, pattern, context);
   const resaleScore = calculateResaleScore(domain, pattern);
-  const reasons = generateReasons(domain, pattern, qualityScore, seoScore);
+  const reasons = generateReasons(domain, pattern, qualityScore, seoScore, naturalnessScore);
   
   return {
     domain,
     qualityScore,
     seoScore,
     resaleScore,
+    naturalnessScore,
     reasons,
+    pattern,
   };
 }
 
@@ -204,7 +209,124 @@ function createCandidate(
  * Calculate quality score (0-100)
  * Based on: length, readability, TLD, memorability
  */
-function calculateQualityScore(domain: string, pattern: string): number {
+/**
+ * Calculate naturalness score - how natural and readable the domain feels
+ * Penalizes awkward combinations, repetition, and hard-to-pronounce patterns
+ */
+function calculateNaturalnessScore(domain: string, pattern: string): number {
+  let score = 100; // Start at perfect
+  
+  const domainName = domain.replace('.com', '').toLowerCase();
+  const length = domainName.length;
+  
+  // Penalty for excessive length (harder to remember and type)
+  if (length > 25) {
+    score -= 30;
+  } else if (length > 20) {
+    score -= 20;
+  } else if (length > 18) {
+    score -= 10;
+  }
+  
+  // Penalty for repetitive characters (e.g., "aaa", "lll")
+  if (/([a-z])\1{2,}/.test(domainName)) {
+    score -= 25;
+  }
+  
+  // Penalty for awkward consonant clusters (hard to pronounce)
+  const awkwardClusters = ['tch', 'ngst', 'ngt', 'ghtl', 'chtm', 'ndtm'];
+  for (const cluster of awkwardClusters) {
+    if (domainName.includes(cluster)) {
+      score -= 15;
+      break;
+    }
+  }
+  
+  // Penalty for repeated words (e.g., "tampatampa", "roofingroofing")
+  const words = extractWords(domainName);
+  const uniqueWords = new Set(words);
+  if (words.length !== uniqueWords.size) {
+    score -= 30; // Heavy penalty for word repetition
+  }
+  
+  // Penalty for too many words crammed together
+  if (words.length > 4) {
+    score -= 20;
+  }
+  
+  // Penalty for confusing letter combinations
+  const confusingPairs = ['ll', 'ii', 'oo', 'ee'];
+  let confusingCount = 0;
+  for (const pair of confusingPairs) {
+    if (domainName.includes(pair)) {
+      confusingCount++;
+    }
+  }
+  if (confusingCount > 2) {
+    score -= 15;
+  }
+  
+  // Penalty for ending with common awkward patterns
+  const awkwardEndings = ['ingservice', 'ingcompany', 'ingbusiness', 'ingpros'];
+  for (const ending of awkwardEndings) {
+    if (domainName.endsWith(ending)) {
+      score -= 10;
+      break;
+    }
+  }
+  
+  // Bonus for clean 2-word patterns (most natural)
+  if (words.length === 2 && length <= 16) {
+    score += 10;
+  }
+  
+  // Bonus for strong 3-word patterns
+  if (words.length === 3 && length <= 18) {
+    score += 5;
+  }
+  
+  return Math.min(100, Math.max(0, score));
+}
+
+/**
+ * Extract individual words from a domain name
+ * Simple heuristic based on common service/geo terms
+ */
+function extractWords(domainName: string): string[] {
+  const commonWords = [
+    'tampa', 'florida', 'miami', 'orlando', 'phoenix', 'arizona', 'california',
+    'roofing', 'roofer', 'roof', 'hvac', 'plumbing', 'plumber', 'detailing',
+    'service', 'services', 'company', 'pro', 'pros', 'expert', 'experts',
+    'repair', 'specialist', 'contractor', 'contractors', 'mobile', 'local'
+  ];
+  
+  const words: string[] = [];
+  let remaining = domainName;
+  
+  // Try to match known words
+  while (remaining.length > 0) {
+    let matched = false;
+    
+    for (const word of commonWords) {
+      if (remaining.startsWith(word)) {
+        words.push(word);
+        remaining = remaining.slice(word.length);
+        matched = true;
+        break;
+      }
+    }
+    
+    if (!matched) {
+      // If no match, treat remaining as one word
+      words.push(remaining);
+      break;
+    }
+  }
+  
+  return words;
+}
+
+function calculateQualityScore(domain: string, pattern: string, naturalnessScore: number): number {
   let score = 50; // Base score
   
   const domainName = domain.replace('.com', '');
@@ -237,15 +359,9 @@ function calculateQualityScore(domain: string, pattern: string): number {
     score += 15;
   }
   
-  // Readability (no repeated characters or hard-to-read patterns)
-  if (!/([a-z])\1{2,}/.test(domainName)) {
-    score += 5;
-  }
-  
-  // Memorability (simple patterns)
-  if (length <= 15 && !domainName.includes('service')) {
-    score += 5;
-  }
+  // Factor in naturalness score (weighted)
+  const naturalnessBonus = (naturalnessScore - 50) * 0.2; // 20% weight
+  score += naturalnessBonus;
   
   return Math.min(100, Math.max(0, score));
 }
@@ -342,49 +458,60 @@ function generateReasons(
   domain: string,
   pattern: string,
   qualityScore: number,
-  seoScore: number
+  seoScore: number,
+  naturalnessScore: number
 ): string[] {
   const reasons: string[] = [];
   const domainName = domain.replace('.com', '');
   const length = domainName.length;
   
-  // Quality reasons
+  // Pattern-based reasons
   if (pattern === 'exact-city-service') {
     reasons.push('Exact city + service match');
   } else if (pattern === 'service-city') {
     reasons.push('Service-first keyword order');
   } else if (pattern === 'state-service') {
     reasons.push('State-level geo match');
+  } else if (pattern === 'city-service-suffix') {
+    reasons.push('City + service with trust-building suffix');
   }
   
-  // Length reasons
+  // Naturalness-based reasons
+  if (naturalnessScore >= 90) {
+    reasons.push('Highly natural and memorable');
+  } else if (naturalnessScore >= 75) {
+    reasons.push('Clean and readable');
+  } else if (naturalnessScore < 50) {
+    reasons.push('Complex structure'); // Warning
+  }
+  
+  // Quality-based reasons
   if (length <= 12) {
     reasons.push('Short and memorable');
   } else if (length <= 18) {
     reasons.push('Good length for branding');
   }
   
-  // SEO reasons
-  if (seoScore >= 85) {
-    reasons.push('Excellent SEO potential');
-  } else if (seoScore >= 70) {
-    reasons.push('Strong local SEO value');
+  if (qualityScore >= 85) {
+    reasons.push('High overall quality');
   }
   
-  // TLD
+  // SEO-based reasons
+  if (seoScore >= 85) {
+    reasons.push('Strong local SEO potential');
+  } else if (seoScore >= 70) {
+    reasons.push('Good local SEO match');
+  }
+  
+  // TLD reason
   if (domain.endsWith('.com')) {
     reasons.push('.com TLD premium');
   }
   
-  // Brandability
-  if (!/[-0-9]/.test(domainName)) {
-    reasons.push('Clean, brandable domain');
+  // Ensure at least one reason
+  if (reasons.length === 0) {
+    reasons.push('Viable geo-service domain');
   }
   
-  // Professional appeal
-  if (pattern.includes('suffix')) {
-    reasons.push('Professional suffix adds authority');
-  }
-  
-  return reasons.slice(0, 4); // Limit to top 4 reasons
+  return reasons.slice(0, 4); // Limit to 4 reasons
 }

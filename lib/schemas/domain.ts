@@ -22,8 +22,14 @@ export type DomainAvailabilityInput = z.infer<typeof domainAvailabilityInputSche
 export const domainAvailabilityResultSchema = z.object({
   domain: z.string(),
   available: z.boolean(),
-  status: z.enum(['available', 'taken', 'unknown']),
+  status: z.enum(['available', 'taken', 'premium', 'invalid', 'error', 'unknown']),
   checkedAt: z.date(),
+  provider: z.string().optional(),
+  error: z.string().optional(),
+  availabilitySource: z.string().optional(),
+  providerResponseCode: z.number().optional(),
+  checkedAtTimestamp: z.number().optional(),
+  cacheHit: z.boolean().optional(),
 });
 
 export type DomainAvailabilityResult = z.infer<typeof domainAvailabilityResultSchema>;

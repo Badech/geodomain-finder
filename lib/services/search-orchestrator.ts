@@ -33,11 +33,16 @@ export interface SearchProgress {
 export interface DomainOpportunity {
   domain: string;
   tld: string;
-  status: 'available' | 'taken' | 'unknown';
+  status: 'available' | 'taken' | 'premium' | 'invalid' | 'error' | 'unknown';
   qualityScore: number;
   seoScore: number;
   resaleScore: number;
+  naturalnessScore?: number;
   reasons: string[];
+  pattern?: string;
+  availabilityCheckedAt?: Date;
+  availabilitySource?: string;
+  providerResponseCode?: number;
 }
 
 export interface EnrichedBusinessLead extends ScoredBusinessLead {
@@ -45,6 +50,17 @@ export interface EnrichedBusinessLead extends ScoredBusinessLead {
     email: string | null;
     source: string | null;
     confidence: 'high' | 'medium' | 'low' | null;
+  };
+  // Phase 1 enhancements from matching
+  recommendedDomain?: string;
+  alternativeDomains?: string[];
+  fitScore?: number;
+  fitReasons?: string[];
+  currentDomainAnalysis?: {
+    domain: string;
+    weaknesses: string[];
+    strengths: string[];
+    overallScore: number;
   };
 }
 
@@ -124,6 +140,18 @@ export class SearchOrchestrator {
         enrichedBusinesses
       );
 
+      // Enrich businesses with match data
+      for (const business of enrichedBusinesses) {
+        const match = matches.find(m => m.businessLeadId === business.id);
+        if (match) {
+          business.recommendedDomain = match.domain;
+          business.alternativeDomains = match.alternativeDomains;
+          business.fitScore = match.fitScore;
+          business.fitReasons = match.reasons;
+          business.currentDomainAnalysis = match.currentDomainAnalysis;
+        }
+      }
+
       // Stage 8: Complete
       this.reportProgress(onProgress, 'complete', 'Search complete!', 100);
 
@@ -189,24 +217,31 @@ export class SearchOrchestrator {
         return {
           domain: candidate.domain,
           tld: '.com',
-          status: availabilityResult?.status || 'unknown',
+          status: availabilityResult?.status || 'error',
           qualityScore: candidate.qualityScore,
           seoScore: candidate.seoScore,
           resaleScore: candidate.resaleScore,
+          naturalnessScore: candidate.naturalnessScore,
           reasons: candidate.reasons,
+          pattern: candidate.pattern,
+          availabilityCheckedAt: availabilityResult?.checkedAt,
+          availabilitySource: availabilityResult?.availabilitySource,
+          providerResponseCode: availabilityResult?.providerResponseCode,
         };
       });
     } catch (error) {
-      // On error, mark all as unknown
-      console.error('Domain availability check failed:', error);
+      // On complete provider failure, mark domains with error status
+      console.error('Domain availability check failed completely:', error);
       return candidates.map(candidate => ({
         domain: candidate.domain,
         tld: '.com',
-        status: 'unknown' as const,
+        status: 'error' as const,
         qualityScore: candidate.qualityScore,
         seoScore: candidate.seoScore,
         resaleScore: candidate.resaleScore,
+        naturalnessScore: candidate.naturalnessScore,
         reasons: candidate.reasons,
+        pattern: candidate.pattern,
       }));
     }
   }

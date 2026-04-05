@@ -35,6 +35,15 @@ export interface DomainBusinessMatch {
   fitScore: number;
   matchReason: string;
   reasons: string[];
+  alternativeDomains?: string[]; // Top 3 alternative domain recommendations
+  currentDomainAnalysis?: CurrentDomainAnalysis;
+}
+
+export interface CurrentDomainAnalysis {
+  domain: string;
+  weaknesses: string[];
+  strengths: string[];
+  overallScore: number; // 0-100, lower is weaker (more opportunity)
 }
 
 /**
@@ -252,7 +261,7 @@ export function matchDomainsToBusinesses(
   const matches: DomainBusinessMatch[] = [];
   
   for (const business of businesses) {
-    // Find best matching domain for this business
+    // Find best matching domains for this business
     const domainMatches = domains.map(domain => ({
       domain,
       fitScore: calculateFitScore(domain, business),
@@ -267,6 +276,17 @@ export function matchDomainsToBusinesses(
       const matchReason = generateMatchReason(bestMatch.domain, business);
       const reasons = generateMatchReasons(bestMatch.domain, business);
       
+      // Get top 3 alternative domains
+      const alternativeDomains = domainMatches
+        .slice(1, 4) // Skip the best match, get next 3
+        .filter(m => m.fitScore > 40) // Only include decent alternatives
+        .map(m => m.domain.domain);
+      
+      // Analyze current domain if business has one
+      const currentDomainAnalysis = business.currentDomain
+        ? analyzeCurrentDomain(business.currentDomain, business)
+        : undefined;
+      
       matches.push({
         businessLeadId: business.id,
         domain: bestMatch.domain.domain,
@@ -274,6 +294,8 @@ export function matchDomainsToBusinesses(
         fitScore: bestMatch.fitScore,
         matchReason,
         reasons,
+        alternativeDomains: alternativeDomains.length > 0 ? alternativeDomains : undefined,
+        currentDomainAnalysis,
       });
     }
   }
@@ -287,33 +309,148 @@ export function matchDomainsToBusinesses(
 function calculateFitScore(domain: DomainCandidate, business: ScoredBusinessLead): number {
   let score = 0;
   
-  // Base score from domain quality
-  score += domain.qualityScore * 0.3;
-  score += domain.seoScore * 0.3;
+  // Base score from domain quality (40% weight)
+  score += domain.qualityScore * 0.25;
+  score += domain.seoScore * 0.25;
+  score += domain.naturalnessScore * 0.15; // Favor natural domains
+  score += domain.resaleScore * 0.1;
   
-  // Buyer motivation (higher buyer score = better fit)
-  score += business.buyerScore * 0.25;
+  // Buyer motivation (20% weight - higher buyer score = better fit)
+  score += business.buyerScore * 0.2;
   
-  // Geographic and niche relevance
+  // Geographic and niche relevance (30% weight)
   const domainLower = domain.domain.toLowerCase();
   const cityNorm = business.city.toLowerCase().replace(/\s+/g, '');
   const stateNorm = business.state.toLowerCase().replace(/\s+/g, '');
+  const nicheNorm = business.niche.toLowerCase().replace(/\s+/g, '');
+  
+  let geoServiceBonus = 0;
   
   if (domainLower.includes(cityNorm)) {
-    score += 10; // City match is important
+    geoServiceBonus += 15; // City match is very important
   }
   
-  if (domainLower.includes(stateNorm)) {
-    score += 5; // State match is good
+  if (domainLower.includes(stateNorm) && !domainLower.includes(cityNorm)) {
+    geoServiceBonus += 8; // State match (if no city match)
+  }
+  
+  if (domainLower.includes(nicheNorm)) {
+    geoServiceBonus += 12; // Service/niche match is important
+  }
+  
+  score += geoServiceBonus;
+  
+  // Current domain weakness bonus (10% weight)
+  if (business.currentDomain) {
+    const currentAnalysis = analyzeCurrentDomain(business.currentDomain, business);
+    // Weaker current domain = higher opportunity
+    const weaknessBonus = (100 - currentAnalysis.overallScore) * 0.1;
+    score += weaknessBonus;
+  } else {
+    // No current domain = high opportunity
+    score += 10;
   }
   
   // Domain length preference (shorter is better for existing businesses)
   const domainName = domain.domain.replace('.com', '');
-  if (domainName.length <= 20) {
+  if (domainName.length <= 15) {
     score += 5;
+  } else if (domainName.length <= 20) {
+    score += 2;
   }
   
   return Math.min(100, Math.max(0, score));
+}
+
+/**
+ * Analyze the current domain to identify weaknesses and opportunities
+ */
+function analyzeCurrentDomain(domain: string, business: ScoredBusinessLead): CurrentDomainAnalysis {
+  const weaknesses: string[] = [];
+  const strengths: string[] = [];
+  let score = 50; // Start neutral
+  
+  const domainName = domain.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].toLowerCase();
+  const domainWithoutTld = domainName.replace(/\.[a-z]{2,}$/, '');
+  const length = domainWithoutTld.length;
+  
+  const cityNorm = business.city.toLowerCase().replace(/\s+/g, '');
+  const stateNorm = business.state.toLowerCase().replace(/\s+/g, '');
+  const nicheNorm = business.niche.toLowerCase().replace(/\s+/g, '');
+  
+  // Check geo-optimization
+  const hasCity = domainWithoutTld.includes(cityNorm);
+  const hasState = domainWithoutTld.includes(stateNorm);
+  
+  if (!hasCity && !hasState) {
+    weaknesses.push('No geographic keywords (city or state)');
+    score -= 20;
+  } else {
+    if (hasCity) {
+      strengths.push('Contains city name');
+      score += 15;
+    }
+    if (hasState) {
+      strengths.push('Contains state name');
+      score += 10;
+    }
+  }
+  
+  // Check service keyword
+  const hasService = domainWithoutTld.includes(nicheNorm);
+  if (!hasService) {
+    weaknesses.push('Missing service/niche keyword');
+    score -= 15;
+  } else {
+    strengths.push('Contains service keyword');
+    score += 15;
+  }
+  
+  // Check length
+  if (length > 25) {
+    weaknesses.push('Too long - hard to remember');
+    score -= 15;
+  } else if (length > 20) {
+    weaknesses.push('Somewhat long');
+    score -= 5;
+  } else if (length <= 15) {
+    strengths.push('Good length');
+    score += 10;
+  }
+  
+  // Check if it's branded vs generic
+  if (!hasCity && !hasState && !hasService) {
+    strengths.push('Branded domain (not geo-specific)');
+    score += 5; // Branded can be good too
+  }
+  
+  // Check TLD
+  if (!domainName.endsWith('.com')) {
+    weaknesses.push('Not a .com domain');
+    score -= 10;
+  } else {
+    strengths.push('.com TLD');
+    score += 5;
+  }
+  
+  // Check for hyphens or numbers
+  if (/[-0-9]/.test(domainWithoutTld)) {
+    weaknesses.push('Contains hyphens or numbers');
+    score -= 10;
+  }
+  
+  // If no weaknesses found, add a neutral note
+  if (weaknesses.length === 0) {
+    strengths.push('Strong existing domain');
+    score += 10;
+  }
+  
+  return {
+    domain: domainName,
+    weaknesses,
+    strengths,
+    overallScore: Math.min(100, Math.max(0, score)),
+  };
 }
 
 /**

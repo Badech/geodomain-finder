@@ -7,7 +7,7 @@ export interface SearchQuery {
   createdAt: Date;
 }
 
-export type DomainStatus = 'available' | 'taken' | 'unknown';
+export type DomainStatus = 'available' | 'taken' | 'premium' | 'invalid' | 'error' | 'unknown';
 
 export interface DomainOpportunity {
   id: string;
@@ -17,9 +17,15 @@ export interface DomainOpportunity {
   qualityScore: number;
   seoScore: number;
   resaleScore: number;
+  naturalnessScore?: number; // New: readability/naturalness score
   reasons: string[];
   searchQueryId: string;
   saved: boolean;
+  pattern?: string; // Which generation pattern created this
+  // Availability metadata
+  availabilityCheckedAt?: Date;
+  availabilitySource?: string;
+  providerResponseCode?: number;
 }
 
 export type LeadStatus = 'new' | 'saved' | 'contacted' | 'interested' | 'follow-up' | 'closed';
@@ -44,6 +50,18 @@ export interface BusinessLead {
   recommendedDomainId?: string;
   recommendedDomain?: string;
   matchReason?: string;
+  // Enhanced Phase 1 fields
+  alternativeDomains?: string[]; // Top 3 alternative domain recommendations
+  fitScore?: number; // How well the recommended domain fits this business
+  fitReasons?: string[]; // Why this domain is a good fit
+  currentDomainAnalysis?: CurrentDomainAnalysis;
+}
+
+export interface CurrentDomainAnalysis {
+  domain: string;
+  weaknesses: string[];
+  strengths: string[];
+  overallScore: number; // 0-100, lower is weaker (more opportunity)
 }
 
 export interface ActivityNote {

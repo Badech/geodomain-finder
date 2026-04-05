@@ -4,10 +4,15 @@
 export interface DomainAvailabilityResult {
   domain: string;
   available: boolean;
-  status: 'available' | 'taken' | 'unknown';
+  status: 'available' | 'taken' | 'premium' | 'invalid' | 'error' | 'unknown';
   checkedAt: Date;
   provider?: string;
   error?: string;
+  // Enhanced metadata for debugging and transparency
+  availabilitySource?: string; // Which provider/cache returned this result
+  providerResponseCode?: number; // HTTP status or API response code
+  checkedAtTimestamp?: number; // Unix timestamp for easier comparison
+  cacheHit?: boolean; // Whether this came from cache
 }
 
 export interface DomainProvider {
