@@ -5,8 +5,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
 import { getNote, updateNote, deleteNote } from '../../../../lib/services/note-service';
+import { updateNoteSchema, type UpdateNote } from '../../../../lib/schemas/note';
 import { 
   createSuccessResponse,
   createErrorResponse,
@@ -16,12 +16,6 @@ import {
   logResponse 
 } from '../../../../lib/api/utils';
 
-const updateNoteSchema = z.object({
-  content: z.string().min(1).max(5000),
-});
-
-type UpdateNoteRequest = z.infer<typeof updateNoteSchema>;
-
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } }
@@ -29,7 +23,7 @@ export async function PATCH(
   const startTime = Date.now();
   
   return withErrorHandling(async () => {
-    const body = await parseRequestBody<UpdateNoteRequest>(request, updateNoteSchema);
+    const body = await parseRequestBody<UpdateNote>(request, updateNoteSchema);
     logRequest('PATCH', `/api/notes/${params.id}`, body);
 
     // Check if note exists

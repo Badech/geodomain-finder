@@ -6,8 +6,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
 import { getOpportunity, updateOpportunity, deleteOpportunity } from '../../../../lib/services/opportunity-service';
+import { updateOpportunitySchema, type UpdateOpportunity } from '../../../../lib/schemas/opportunity';
 import { 
   createSuccessResponse,
   createErrorResponse,
@@ -16,14 +16,6 @@ import {
   logRequest,
   logResponse 
 } from '../../../../lib/api/utils';
-
-const updateOpportunitySchema = z.object({
-  fitScore: z.number().min(0).max(100).optional(),
-  reasons: z.array(z.string()).optional(),
-  matchReason: z.string().optional(),
-});
-
-type UpdateOpportunityRequest = z.infer<typeof updateOpportunitySchema>;
 
 export async function GET(
   request: NextRequest,
@@ -54,7 +46,7 @@ export async function PATCH(
   const startTime = Date.now();
   
   return withErrorHandling(async () => {
-    const body = await parseRequestBody<UpdateOpportunityRequest>(request, updateOpportunitySchema);
+    const body = await parseRequestBody<UpdateOpportunity>(request, updateOpportunitySchema);
     logRequest('PATCH', `/api/opportunities/${params.id}`, body);
 
     // Check if opportunity exists

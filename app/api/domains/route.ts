@@ -4,8 +4,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
 import { listDomains, countDomains } from '../../../lib/services/domain-service';
+import { domainQuerySchema } from '../../../lib/schemas/domain';
 import { 
   createSuccessResponse, 
   getQueryParams,
@@ -21,35 +21,37 @@ export async function GET(request: NextRequest) {
     const params = getQueryParams(request);
     logRequest('GET', '/api/domains', Object.fromEntries(params));
 
-    // Parse query parameters
-    const status = params.get('status') as 'available' | 'taken' | 'unknown' | null;
-    const saved = params.get('saved') === 'true' ? true : params.get('saved') === 'false' ? false : undefined;
-    const searchQueryId = params.get('searchQueryId') || undefined;
-    const minQualityScore = params.get('minQualityScore') ? parseInt(params.get('minQualityScore')!) : undefined;
-    const minSeoScore = params.get('minSeoScore') ? parseInt(params.get('minSeoScore')!) : undefined;
-    const sortBy = (params.get('sortBy') as 'qualityScore' | 'seoScore' | 'resaleScore' | 'createdAt') || 'qualityScore';
-    const sortOrder = (params.get('sortOrder') as 'asc' | 'desc') || 'desc';
-    const limit = params.get('limit') ? parseInt(params.get('limit')!) : 100;
+    // Parse and validate query parameters using Zod schema
+    const query = domainQuerySchema.parse({
+      status: params.get('status'),
+      saved: params.get('saved'),
+      searchQueryId: params.get('searchQueryId'),
+      minQualityScore: params.get('minQualityScore'),
+      minSeoScore: params.get('minSeoScore'),
+      sortBy: params.get('sortBy'),
+      sortOrder: params.get('sortOrder'),
+      limit: params.get('limit'),
+    });
 
     // Fetch domains
     const domains = await listDomains({
-      status: status || undefined,
-      saved,
-      searchQueryId,
-      minQualityScore,
-      minSeoScore,
-      sortBy,
-      sortOrder,
-      limit,
+      status: query.status,
+      saved: query.saved,
+      searchQueryId: query.searchQueryId,
+      minQualityScore: query.minQualityScore,
+      minSeoScore: query.minSeoScore,
+      sortBy: query.sortBy,
+      sortOrder: query.sortOrder,
+      limit: query.limit,
     });
 
     // Get total count
     const total = await countDomains({
-      status: status || undefined,
-      saved,
-      searchQueryId,
-      minQualityScore,
-      minSeoScore,
+      status: query.status,
+      saved: query.saved,
+      searchQueryId: query.searchQueryId,
+      minQualityScore: query.minQualityScore,
+      minSeoScore: query.minSeoScore,
     });
 
     const duration = Date.now() - startTime;

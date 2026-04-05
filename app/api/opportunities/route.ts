@@ -5,8 +5,12 @@
  */
 
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
 import { listOpportunities, createOpportunity } from '../../../lib/services/opportunity-service';
+import { 
+  createOpportunitySchema, 
+  opportunityQuerySchema,
+  type CreateOpportunity 
+} from '../../../lib/schemas/opportunity';
 import { 
   createSuccessResponse,
   parseRequestBody,
@@ -16,16 +20,6 @@ import {
   logResponse 
 } from '../../../lib/api/utils';
 
-const createOpportunitySchema = z.object({
-  domainId: z.string(),
-  businessLeadId: z.string(),
-  fitScore: z.number().min(0).max(100),
-  reasons: z.array(z.string()),
-  matchReason: z.string().optional(),
-});
-
-type CreateOpportunityRequest = z.infer<typeof createOpportunitySchema>;
-
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   
@@ -33,22 +27,24 @@ export async function GET(request: NextRequest) {
     const params = getQueryParams(request);
     logRequest('GET', '/api/opportunities', Object.fromEntries(params));
 
-    // Parse query parameters
-    const minFitScore = params.get('minFitScore') ? parseInt(params.get('minFitScore')!) : undefined;
-    const businessLeadId = params.get('businessLeadId') || undefined;
-    const domainId = params.get('domainId') || undefined;
-    const sortBy = (params.get('sortBy') as 'fitScore' | 'createdAt') || 'fitScore';
-    const sortOrder = (params.get('sortOrder') as 'asc' | 'desc') || 'desc';
-    const limit = params.get('limit') ? parseInt(params.get('limit')!) : 100;
+    // Parse and validate query parameters using Zod schema
+    const query = opportunityQuerySchema.parse({
+      minFitScore: params.get('minFitScore'),
+      businessLeadId: params.get('businessLeadId'),
+      domainId: params.get('domainId'),
+      sortBy: params.get('sortBy'),
+      sortOrder: params.get('sortOrder'),
+      limit: params.get('limit'),
+    });
 
     // Fetch opportunities
     const opportunities = await listOpportunities({
-      minFitScore,
-      businessLeadId,
-      domainId,
-      sortBy,
-      sortOrder,
-      limit,
+      minFitScore: query.minFitScore,
+      businessLeadId: query.businessLeadId,
+      domainId: query.domainId,
+      sortBy: query.sortBy,
+      sortOrder: query.sortOrder,
+      limit: query.limit,
     });
 
     const duration = Date.now() - startTime;
@@ -65,7 +61,7 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   return withErrorHandling(async () => {
-    const body = await parseRequestBody<CreateOpportunityRequest>(request, createOpportunitySchema);
+    const body = await parseRequestBody<CreateOpportunity>(request, createOpportunitySchema);
     logRequest('POST', '/api/opportunities', body);
 
     const opportunity = await createOpportunity({

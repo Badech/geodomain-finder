@@ -5,8 +5,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
 import { getDomain, updateDomain, toggleDomainSaved } from '../../../../lib/services/domain-service';
+import { updateDomainSchema, type UpdateDomain } from '../../../../lib/schemas/domain';
 import { 
   createSuccessResponse,
   createErrorResponse,
@@ -15,17 +15,6 @@ import {
   logRequest,
   logResponse 
 } from '../../../../lib/api/utils';
-
-const updateDomainSchema = z.object({
-  saved: z.boolean().optional(),
-  status: z.enum(['available', 'taken', 'unknown']).optional(),
-  qualityScore: z.number().min(0).max(100).optional(),
-  seoScore: z.number().min(0).max(100).optional(),
-  resaleScore: z.number().min(0).max(100).optional(),
-  reasons: z.array(z.string()).optional(),
-});
-
-type UpdateDomainRequest = z.infer<typeof updateDomainSchema>;
 
 export async function GET(
   request: NextRequest,
@@ -56,7 +45,7 @@ export async function PATCH(
   const startTime = Date.now();
   
   return withErrorHandling(async () => {
-    const body = await parseRequestBody<UpdateDomainRequest>(request, updateDomainSchema);
+    const body = await parseRequestBody<UpdateDomain>(request, updateDomainSchema);
     logRequest('PATCH', `/api/domains/${params.id}`, body);
 
     // Check if domain exists

@@ -219,34 +219,64 @@ async function persistSearchResultsInBackground(
     const savedDomains = await Promise.all(domainPromises);
 
     // Persist business leads to database
-    const businessPromises = result.businesses.map((business: any) =>
-      db.businessLead.upsert({
-        where: { placeId: business.id },
-        create: {
-          placeId: business.id,
-          name: business.name,
-          niche: body.niche,
-          city: business.city,
-          state: business.state,
-          phone: business.phone,
-          email: business.email,
-          website: business.website,
-          address: business.address,
-          rating: business.rating,
-          reviewCount: business.reviewCount,
-          currentDomain: business.currentDomain,
-          buyerScore: business.buyerScore,
-          tags: business.tags || [],
-          notes: business.scoreReasons?.join('\n') || '',
-        },
-        update: {
-          rating: business.rating,
-          reviewCount: business.reviewCount,
-          buyerScore: business.buyerScore,
-          email: business.email || undefined,
-        },
-      })
-    );
+    const businessPromises = result.businesses.map(async (business: any) => {
+      // Only use upsert if business has a placeId (for deduplication)
+      if (business.id) {
+        return db.businessLead.upsert({
+          where: { placeId: business.id },
+          create: {
+            placeId: business.id,
+            name: business.name,
+            niche: body.niche,
+            city: business.city,
+            state: business.state,
+            phone: business.phone,
+            email: business.email,
+            website: business.website,
+            address: business.address,
+            rating: business.rating,
+            reviewCount: business.reviewCount,
+            currentDomain: business.currentDomain,
+            buyerScore: business.buyerScore,
+            tags: business.tags || [],
+            notes: business.scoreReasons?.join('\n') || '',
+            latitude: business.latitude,
+            longitude: business.longitude,
+          },
+          update: {
+            rating: business.rating,
+            reviewCount: business.reviewCount,
+            buyerScore: business.buyerScore,
+            email: business.email || undefined,
+            latitude: business.latitude,
+            longitude: business.longitude,
+          },
+        });
+      } else {
+        // No placeId, just create a new record
+        return db.businessLead.create({
+          data: {
+            placeId: null,
+            name: business.name,
+            niche: body.niche,
+            city: business.city,
+            state: business.state,
+            phone: business.phone,
+            email: business.email,
+            website: business.website,
+            address: business.address,
+            rating: business.rating,
+            reviewCount: business.reviewCount,
+            currentDomain: business.currentDomain,
+            buyerScore: business.buyerScore,
+            tags: business.tags || [],
+            notes: business.scoreReasons?.join('\n') || '',
+            latitude: business.latitude,
+            longitude: business.longitude,
+          },
+        });
+      }
+    });
 
     const savedBusinesses = await Promise.all(businessPromises);
 

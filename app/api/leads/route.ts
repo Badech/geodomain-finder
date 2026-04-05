@@ -5,6 +5,7 @@
 
 import { NextRequest } from 'next/server';
 import { listLeads, countLeads } from '../../../lib/services/lead-service';
+import { leadQuerySchema } from '../../../lib/schemas/lead';
 import { 
   createSuccessResponse, 
   getQueryParams,
@@ -20,41 +21,43 @@ export async function GET(request: NextRequest) {
     const params = getQueryParams(request);
     logRequest('GET', '/api/leads', Object.fromEntries(params));
 
-    // Parse query parameters
-    const niche = params.get('niche') || undefined;
-    const city = params.get('city') || undefined;
-    const state = params.get('state') || undefined;
-    const status = params.get('status') || undefined;
-    const minBuyerScore = params.get('minBuyerScore') ? parseInt(params.get('minBuyerScore')!) : undefined;
-    const minRating = params.get('minRating') ? parseFloat(params.get('minRating')!) : undefined;
-    const hasWebsite = params.get('hasWebsite') === 'true' ? true : params.get('hasWebsite') === 'false' ? false : undefined;
-    const sortBy = (params.get('sortBy') as 'buyerScore' | 'rating' | 'createdAt' | 'name') || 'buyerScore';
-    const sortOrder = (params.get('sortOrder') as 'asc' | 'desc') || 'desc';
-    const limit = params.get('limit') ? parseInt(params.get('limit')!) : 100;
+    // Parse and validate query parameters using Zod schema
+    const query = leadQuerySchema.parse({
+      niche: params.get('niche'),
+      city: params.get('city'),
+      state: params.get('state'),
+      status: params.get('status'),
+      minBuyerScore: params.get('minBuyerScore'),
+      minRating: params.get('minRating'),
+      hasWebsite: params.get('hasWebsite'),
+      sortBy: params.get('sortBy'),
+      sortOrder: params.get('sortOrder'),
+      limit: params.get('limit'),
+    });
 
     // Fetch leads
     const leads = await listLeads({
-      niche,
-      city,
-      state,
-      status,
-      minBuyerScore,
-      minRating,
-      hasWebsite,
-      sortBy,
-      sortOrder,
-      limit,
+      niche: query.niche,
+      city: query.city,
+      state: query.state,
+      status: query.status,
+      minBuyerScore: query.minBuyerScore,
+      minRating: query.minRating,
+      hasWebsite: query.hasWebsite,
+      sortBy: query.sortBy,
+      sortOrder: query.sortOrder,
+      limit: query.limit,
     });
 
     // Get total count
     const total = await countLeads({
-      niche,
-      city,
-      state,
-      status,
-      minBuyerScore,
-      minRating,
-      hasWebsite,
+      niche: query.niche,
+      city: query.city,
+      state: query.state,
+      status: query.status,
+      minBuyerScore: query.minBuyerScore,
+      minRating: query.minRating,
+      hasWebsite: query.hasWebsite,
     });
 
     const duration = Date.now() - startTime;

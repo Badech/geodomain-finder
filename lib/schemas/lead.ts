@@ -34,3 +34,37 @@ export const leadStatusUpdateSchema = z.object({
 });
 
 export type LeadStatusUpdate = z.infer<typeof leadStatusUpdateSchema>;
+
+// Lead update schema (for PATCH /api/leads/[id])
+export const updateLeadSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  phone: z.string().min(10).max(20).optional(),
+  email: z.string().email().optional(),
+  website: z.string().url().optional(),
+  address: z.string().max(500).optional(),
+  rating: z.number().min(0).max(5).optional(),
+  reviewCount: z.number().min(0).optional(),
+  currentDomain: z.string().max(255).optional(),
+  buyerScore: z.number().min(0).max(100).optional(),
+  status: z.enum(['new', 'saved', 'contacted', 'interested', 'follow-up', 'closed']).optional(),
+  tags: z.array(z.string().max(50)).optional(),
+  notes: z.string().max(5000).optional(),
+});
+
+export type UpdateLead = z.infer<typeof updateLeadSchema>;
+
+// Lead query filters (for GET /api/leads)
+export const leadQuerySchema = z.object({
+  niche: z.string().max(100).optional(),
+  city: z.string().max(100).optional(),
+  state: z.string().max(50).optional(),
+  status: z.enum(['new', 'saved', 'contacted', 'interested', 'follow-up', 'closed']).optional(),
+  minBuyerScore: z.coerce.number().min(0).max(100).optional(),
+  minRating: z.coerce.number().min(0).max(5).optional(),
+  hasWebsite: z.coerce.boolean().optional(),
+  sortBy: z.enum(['buyerScore', 'rating', 'createdAt', 'name']).optional().default('buyerScore'),
+  sortOrder: z.enum(['asc', 'desc']).optional().default('desc'),
+  limit: z.coerce.number().min(1).max(100).optional().default(100),
+});
+
+export type LeadQuery = z.infer<typeof leadQuerySchema>;

@@ -5,8 +5,12 @@
  */
 
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
 import { listNotesForBusiness, getRecentNotes, createNote } from '../../../lib/services/note-service';
+import { 
+  createNoteSchema, 
+  noteQuerySchema,
+  type CreateNote 
+} from '../../../lib/schemas/note';
 import { 
   createSuccessResponse,
   parseRequestBody,
@@ -16,13 +20,6 @@ import {
   logResponse 
 } from '../../../lib/api/utils';
 
-const createNoteSchema = z.object({
-  businessLeadId: z.string(),
-  content: z.string().min(1),
-});
-
-type CreateNoteRequest = z.infer<typeof createNoteSchema>;
-
 export async function GET(request: NextRequest) {
   const startTime = Date.now();
   
@@ -30,8 +27,14 @@ export async function GET(request: NextRequest) {
     const params = getQueryParams(request);
     logRequest('GET', '/api/notes', Object.fromEntries(params));
 
-    const businessLeadId = params.get('businessLeadId');
-    const limit = params.get('limit') ? parseInt(params.get('limit')!) : 10;
+    // Parse and validate query parameters using Zod schema
+    const query = noteQuerySchema.parse({
+      businessLeadId: params.get('businessLeadId'),
+      limit: params.get('limit'),
+    });
+
+    const businessLeadId = query.businessLeadId;
+    const limit = query.limit;
 
     let notes;
     if (businessLeadId) {
@@ -56,7 +59,7 @@ export async function POST(request: NextRequest) {
   const startTime = Date.now();
   
   return withErrorHandling(async () => {
-    const body = await parseRequestBody<CreateNoteRequest>(request, createNoteSchema);
+    const body = await parseRequestBody<CreateNote>(request, createNoteSchema);
     logRequest('POST', '/api/notes', body);
 
     const note = await createNote({ 

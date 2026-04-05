@@ -5,8 +5,8 @@
  */
 
 import { NextRequest } from 'next/server';
-import { z } from 'zod';
-import { getLead, updateLead, updateLeadStatus } from '../../../../lib/services/lead-service';
+import { getLead, updateLead } from '../../../../lib/services/lead-service';
+import { updateLeadSchema, type UpdateLead } from '../../../../lib/schemas/lead';
 import { 
   createSuccessResponse,
   createErrorResponse,
@@ -15,23 +15,6 @@ import {
   logRequest,
   logResponse 
 } from '../../../../lib/api/utils';
-
-const updateLeadSchema = z.object({
-  name: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email().optional(),
-  website: z.string().optional(),
-  address: z.string().optional(),
-  rating: z.number().min(0).max(5).optional(),
-  reviewCount: z.number().min(0).optional(),
-  currentDomain: z.string().optional(),
-  buyerScore: z.number().min(0).max(100).optional(),
-  status: z.enum(['new', 'saved', 'contacted', 'interested', 'follow-up', 'closed']).optional(),
-  tags: z.array(z.string()).optional(),
-  notes: z.string().optional(),
-});
-
-type UpdateLeadRequest = z.infer<typeof updateLeadSchema>;
 
 export async function GET(
   request: NextRequest,
@@ -62,7 +45,7 @@ export async function PATCH(
   const startTime = Date.now();
   
   return withErrorHandling(async () => {
-    const body = await parseRequestBody<UpdateLeadRequest>(request, updateLeadSchema);
+    const body = await parseRequestBody<UpdateLead>(request, updateLeadSchema);
     logRequest('PATCH', `/api/leads/${params.id}`, body);
 
     // Check if lead exists
