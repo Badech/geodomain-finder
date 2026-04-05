@@ -4,15 +4,17 @@
   "version": "0.0.0",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma generate && next build",
     "start": "next start",
     "lint": "next lint",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "prisma generate"
   },
   "dependencies": {
     "@hello-pangea/dnd": "^17.0.0",
     "@hookform/resolvers": "^3.10.0",
+    "@prisma/client": "^5.0.0",
     "@radix-ui/react-accordion": "^1.2.11",
     "@radix-ui/react-alert-dialog": "^1.1.14",
     "@radix-ui/react-aspect-ratio": "^1.1.7",
@@ -66,6 +68,7 @@
   "devDependencies": {
     "@playwright/test": "^1.57.0",
     "@tailwindcss/typography": "^0.5.16",
+    "prisma": "^5.0.0",
     "@testing-library/jest-dom": "^6.6.0",
     "@testing-library/react": "^16.0.0",
     "@types/node": "^22.16.5",

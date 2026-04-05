@@ -16,20 +16,47 @@ import {
   logResponse 
 } from '../../../lib/api/utils';
 import { db } from '../../../lib/db';
+import { searchRateLimiter, getClientIdentifier, createRateLimitResponse } from '../../../lib/api/rate-limit';
 
-// Request validation schema
+// Request validation schema with sanitization
 const searchRequestSchema = z.object({
-  niche: z.string().min(1).max(100),
-  city: z.string().min(1).max(100),
-  state: z.string().min(1).max(50),
-  modifiers: z.array(z.string()).optional(),
-  maxDomains: z.number().min(1).max(50).optional().default(20),
-  maxBusinesses: z.number().min(1).max(30).optional().default(20),
+  niche: z.string()
+    .min(1, 'Niche is required')
+    .max(100, 'Niche must be less than 100 characters')
+    .trim()
+    .transform(val => val.toLowerCase()),
+  city: z.string()
+    .min(1, 'City is required')
+    .max(100, 'City must be less than 100 characters')
+    .trim(),
+  state: z.string()
+    .min(1, 'State is required')
+    .max(50, 'State must be less than 50 characters')
+    .trim(),
+  modifiers: z.array(z.string().max(50))
+    .optional()
+    .transform(val => val?.slice(0, 10)), // Max 10 modifiers
+  maxDomains: z.number()
+    .min(1, 'Must generate at least 1 domain')
+    .max(50, 'Cannot generate more than 50 domains')
+    .optional()
+    .default(20),
+  maxBusinesses: z.number()
+    .min(1, 'Must search for at least 1 business')
+    .max(30, 'Cannot search for more than 30 businesses')
+    .optional()
+    .default(20),
 });
 
 type SearchRequest = z.infer<typeof searchRequestSchema>;
 
 export async function POST(request: NextRequest) {
+  // Rate limiting
+  const clientId = getClientIdentifier(request);
+  if (searchRateLimiter.isRateLimited(clientId)) {
+    const resetTime = searchRateLimiter.getResetTime(clientId);
+    return createRateLimitResponse(resetTime);
+  }
   const startTime = Date.now();
   
   return withErrorHandling(async () => {
