@@ -290,7 +290,7 @@ export class SearchOrchestrator {
   /**
    * Report progress to callback
    */
-  private reportProgress(
+  protected reportProgress(
     callback: ProgressCallback | undefined,
     stage: SearchProgress['stage'],
     message: string,
