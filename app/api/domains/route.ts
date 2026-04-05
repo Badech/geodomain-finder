@@ -61,7 +61,7 @@ export async function GET(request: NextRequest) {
       domains,
       pagination: {
         total,
-        limit,
+        limit: query.limit,
         returned: domains.length,
       },
     });

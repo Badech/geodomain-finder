@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
       leads,
       pagination: {
         total,
-        limit,
+        limit: query.limit,
         returned: leads.length,
       },
     });
