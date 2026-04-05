@@ -8,11 +8,11 @@ import { z } from 'zod';
 export const sanitizedString = (maxLength: number = 255) =>
   z.string()
     .trim()
-    .max(maxLength)
     .transform(val => {
       // Remove potentially dangerous characters
       return val.replace(/[<>]/g, '');
-    });
+    })
+    .pipe(z.string().max(maxLength));
 
 // Email validation
 export const emailSchema = z.string().email('Invalid email address').toLowerCase();
@@ -63,10 +63,10 @@ export function sanitizeHtml(html: string): string {
  */
 export function validateSearchInput(input: unknown) {
   const schema = z.object({
-    niche: sanitizedString(100).min(1),
-    city: sanitizedString(100).min(1),
-    state: sanitizedString(50).min(1),
-    modifiers: z.array(sanitizedString(50)).optional(),
+    niche: z.string().trim().min(1).max(100).transform(val => val.replace(/[<>]/g, '')),
+    city: z.string().trim().min(1).max(100).transform(val => val.replace(/[<>]/g, '')),
+    state: z.string().trim().min(1).max(50).transform(val => val.replace(/[<>]/g, '')),
+    modifiers: z.array(z.string().trim().max(50).transform(val => val.replace(/[<>]/g, ''))).optional(),
     maxDomains: z.number().min(1).max(50).optional().default(20),
     maxBusinesses: z.number().min(1).max(30).optional().default(20),
   });
@@ -108,7 +108,7 @@ export const leadFilterSchema = z.object({
  * Note creation schema
  */
 export const noteSchema = z.object({
-  content: sanitizedString(5000).min(1, 'Note content is required'),
+  content: z.string().trim().min(1, 'Note content is required').max(5000).transform(val => val.replace(/[<>]/g, '')),
   businessLeadId: idSchema,
 });
 
