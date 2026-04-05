@@ -59,7 +59,10 @@ export async function POST(request: NextRequest) {
     const body = await parseRequestBody<CreateNoteRequest>(request, createNoteSchema);
     logRequest('POST', '/api/notes', body);
 
-    const note = await createNote(body);
+    const note = await createNote({ 
+      businessLeadId: body.businessLeadId, 
+      content: body.content 
+    });
 
     const duration = Date.now() - startTime;
     logResponse('POST', '/api/notes', 201, duration);
