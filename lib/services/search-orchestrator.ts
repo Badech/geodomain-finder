@@ -11,6 +11,11 @@ import {
   ScoredBusinessLead,
   DomainBusinessMatch 
 } from './business-matcher';
+import { 
+  analyzeProspect, 
+  getTopBuyers, 
+  ProspectAnalysis 
+} from './prospect-scoring';
 import { DomainProvider } from '../providers/types';
 import { LeadProvider } from '../providers/types';
 import { EmailExtractorProvider } from '../providers/types';
@@ -79,6 +84,14 @@ export interface EnrichedBusinessLead extends ScoredBusinessLead {
     };
     insights: string[];
   };
+  // Phase 6 enhancements - Prospect Scoring
+  topBuyerScore?: number;
+  contactReadinessScore?: number;
+  ranking?: 'platinum' | 'gold' | 'silver' | 'bronze' | 'standard';
+  topBuyerReasons?: string[];
+  contactReadinessReasons?: string[];
+  recommendedAction?: 'immediate' | 'priority' | 'follow-up' | 'monitor';
+  pitchAngles?: string[];
 }
 
 export interface SearchResult {
@@ -86,6 +99,7 @@ export interface SearchResult {
   domains: DomainOpportunity[];
   businesses: EnrichedBusinessLead[];
   matches: DomainBusinessMatch[];
+  topBuyers?: ProspectAnalysis[]; // Phase 6: Top 10 best prospects
   metadata: {
     totalDomains: number;
     availableDomains: number;
@@ -183,6 +197,29 @@ export class SearchOrchestrator {
         }
       }
 
+      // Phase 6: Analyze prospects and add scoring
+      this.reportProgress(onProgress, 'matching', 'Analyzing top prospects...', 90);
+      const prospectAnalyses: ProspectAnalysis[] = enrichedBusinesses.map(business => 
+        analyzeProspect(business, business.currentDomainAnalysis)
+      );
+
+      // Add prospect scores to businesses
+      for (let i = 0; i < enrichedBusinesses.length; i++) {
+        const business = enrichedBusinesses[i];
+        const analysis = prospectAnalyses[i];
+        
+        business.topBuyerScore = analysis.topBuyerScore;
+        business.contactReadinessScore = analysis.contactReadinessScore;
+        business.ranking = analysis.ranking;
+        business.topBuyerReasons = analysis.topBuyerReasons;
+        business.contactReadinessReasons = analysis.contactReadinessReasons;
+        business.recommendedAction = analysis.recommendedAction;
+        business.pitchAngles = analysis.pitchAngles;
+      }
+
+      // Get top 10 buyers for quick reference
+      const topBuyers = getTopBuyers(prospectAnalyses, 10);
+
       // Stage 8: Complete
       this.reportProgress(onProgress, 'complete', 'Search complete!', 100);
 
@@ -193,6 +230,7 @@ export class SearchOrchestrator {
         domains,
         businesses: enrichedBusinesses,
         matches,
+        topBuyers,
         metadata: {
           totalDomains: domains.length,
           availableDomains: domains.filter(d => d.status === 'available').length,
