@@ -305,58 +305,110 @@ export function matchDomainsToBusinesses(
 
 /**
  * Calculate how well a domain fits a specific business (0-100)
+ * Phase 7: Enhanced with additional factors for better matching
  */
 function calculateFitScore(domain: DomainCandidate, business: ScoredBusinessLead): number {
   let score = 0;
-  
-  // Base score from domain quality (40% weight)
-  score += domain.qualityScore * 0.25;
-  score += domain.seoScore * 0.25;
-  score += domain.naturalnessScore * 0.15; // Favor natural domains
-  score += domain.resaleScore * 0.1;
-  
-  // Buyer motivation (20% weight - higher buyer score = better fit)
-  score += business.buyerScore * 0.2;
-  
-  // Geographic and niche relevance (30% weight)
   const domainLower = domain.domain.toLowerCase();
+  const domainName = domain.domain.replace('.com', '');
   const cityNorm = business.city.toLowerCase().replace(/\s+/g, '');
   const stateNorm = business.state.toLowerCase().replace(/\s+/g, '');
   const nicheNorm = business.niche.toLowerCase().replace(/\s+/g, '');
   
+  // 1. Base score from domain quality (35% weight) - slightly reduced to make room for new factors
+  score += domain.qualityScore * 0.20;
+  score += domain.seoScore * 0.25; // SEO most important for local businesses
+  score += domain.naturalnessScore * 0.15; // Readability matters
+  score += domain.resaleScore * 0.08;
+  
+  // 2. Geographic and niche relevance (25% weight) - Phase 7: More nuanced
   let geoServiceBonus = 0;
   
+  // City match is critical for local SEO
   if (domainLower.includes(cityNorm)) {
-    geoServiceBonus += 15; // City match is very important
+    geoServiceBonus += 15;
+    // Bonus if city is at the beginning (better for recall)
+    if (domainLower.startsWith(cityNorm)) {
+      geoServiceBonus += 3;
+    }
   }
   
-  if (domainLower.includes(stateNorm) && !domainLower.includes(cityNorm)) {
-    geoServiceBonus += 8; // State match (if no city match)
+  // State match (valuable if no city)
+  if (domainLower.includes(stateNorm)) {
+    if (!domainLower.includes(cityNorm)) {
+      geoServiceBonus += 8;
+    } else {
+      geoServiceBonus += 2; // Small bonus for having both
+    }
   }
   
+  // Service/niche match
   if (domainLower.includes(nicheNorm)) {
-    geoServiceBonus += 12; // Service/niche match is important
+    geoServiceBonus += 12;
+    // Bonus if service is at the end (natural pattern: "CityService")
+    if (domainLower.endsWith(nicheNorm + '.com')) {
+      geoServiceBonus += 2;
+    }
   }
   
   score += geoServiceBonus;
   
-  // Current domain weakness bonus (10% weight)
+  // 3. Buyer motivation (15% weight) - Phase 7: Consider buyer readiness
+  score += business.buyerScore * 0.15;
+  
+  // 4. Current domain weakness (15% weight) - Phase 7: Enhanced
   if (business.currentDomain) {
     const currentAnalysis = analyzeCurrentDomain(business.currentDomain, business);
     // Weaker current domain = higher opportunity
-    const weaknessBonus = (100 - currentAnalysis.overallScore) * 0.1;
+    const weaknessBonus = (100 - currentAnalysis.overallScore) * 0.15;
     score += weaknessBonus;
+    
+    // Extra bonus if current domain is missing both geo AND service
+    if (currentAnalysis.weaknesses.includes('No geographic keywords (city or state)') &&
+        currentAnalysis.weaknesses.includes('Missing service/niche keyword')) {
+      score += 5; // High opportunity
+    }
   } else {
-    // No current domain = high opportunity
-    score += 10;
+    // No current domain = very high opportunity
+    score += 15;
   }
   
-  // Domain length preference (shorter is better for existing businesses)
-  const domainName = domain.domain.replace('.com', '');
-  if (domainName.length <= 15) {
-    score += 5;
+  // 5. Business local authority (5% weight) - Phase 7: New factor
+  let authorityBonus = 0;
+  if (business.rating >= 4.5 && business.reviewCount >= 100) {
+    authorityBonus += 5; // Established authority
+  } else if (business.rating >= 4.0 && business.reviewCount >= 50) {
+    authorityBonus += 3; // Good authority
+  }
+  score += authorityBonus;
+  
+  // 6. Domain readability (5% weight) - Phase 7: Enhanced
+  let readabilityBonus = 0;
+  
+  // Shorter domains are easier to remember and type
+  if (domainName.length <= 12) {
+    readabilityBonus += 5;
+  } else if (domainName.length <= 15) {
+    readabilityBonus += 3;
   } else if (domainName.length <= 20) {
-    score += 2;
+    readabilityBonus += 1;
+  } else if (domainName.length > 25) {
+    readabilityBonus -= 3; // Penalty for very long domains
+  }
+  
+  // Bonus for clean, no-hyphen, no-number domains
+  if (!/[-0-9]/.test(domainName)) {
+    readabilityBonus += 2;
+  }
+  
+  score += readabilityBonus;
+  
+  // 7. Outreach readiness bonus (Optional - if contact info available)
+  // Phase 7: Consider how easy it is to reach the business
+  if (business.email && business.phone) {
+    score += 3; // Easy to contact = higher conversion probability
+  } else if (business.email || business.phone) {
+    score += 1;
   }
   
   return Math.min(100, Math.max(0, score));
