@@ -11,6 +11,8 @@ import { BusinessCard, BusinessTable } from '@/components/BusinessCard';
 import { useAppState } from '@/hooks/useAppState';
 import { executeSearch } from '@/services/searchService';
 import { US_STATES } from '@/data/mockData';
+import { getCitiesForState } from '@/data/usCities';
+import { CityCombobox } from '@/components/CityCombobox';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 export default function Dashboard() {
@@ -26,6 +28,7 @@ export default function Dashboard() {
   const [showFilters, setShowFilters] = useState(false);
   const [comOnly, setComOnly] = useState(true);
   const [hasSearched, setHasSearched] = useState(false);
+  const [availableCities, setAvailableCities] = useState<string[]>([]);
 
   useEffect(() => {
     const params = searchParams[0];
@@ -37,6 +40,25 @@ export default function Dashboard() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Update available cities when state changes
+  useEffect(() => {
+    async function loadCities() {
+      if (state) {
+        // For now, use synchronous method - will make async with API later if needed
+        const cities = getCitiesForState(state);
+        setAvailableCities(cities);
+        // Reset city if it's not in the new state's city list
+        if (city && !cities.includes(city)) {
+          setCity('');
+        }
+      } else {
+        setAvailableCities([]);
+        setCity('');
+      }
+    }
+    loadCities();
+  }, [state, city]);
 
   const handleSearch = async (n?: string, s?: string, c?: string) => {
     const searchNiche = n || niche;
@@ -106,7 +128,13 @@ export default function Dashboard() {
                 {US_STATES.map(s => <SelectItem key={s} value={s}>{s}</SelectItem>)}
               </SelectContent>
             </Select>
-            <Input placeholder="City" value={city} onChange={e => setCity(e.target.value)} className="h-11" />
+            <CityCombobox
+              value={city}
+              onChange={setCity}
+              cities={availableCities}
+              disabled={!state}
+              placeholder={state ? "Select city" : "Select state first"}
+            />
             <Input placeholder="Modifiers (optional)" value={modifiers} onChange={e => setModifiers(e.target.value)} className="h-11" />
             <div className="flex gap-2">
               <Button onClick={() => handleSearch()} disabled={isSearching || !niche || !state || !city} className="h-11 flex-1 font-semibold shadow-glow">

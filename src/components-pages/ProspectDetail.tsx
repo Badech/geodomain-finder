@@ -29,7 +29,44 @@ export default function ProspectDetail() {
   }
 
   const notes = activityNotes.filter(n => n.businessLeadId === lead.id);
-  const recommendedDomains = domains.filter(d => d.status === 'available').slice(0, 3);
+  
+  // Build recommended domains list from business-specific recommendations
+  const recommendedDomainsList = [];
+  
+  // Add primary recommended domain if exists
+  if (lead.recommendedDomain) {
+    const primaryDomain = domains.find(d => d.domain === lead.recommendedDomain);
+    if (primaryDomain) {
+      recommendedDomainsList.push({
+        domain: primaryDomain,
+        isPrimary: true,
+        fitScore: lead.fitScore || 0,
+      });
+    }
+  }
+  
+  // Add alternative domains
+  if (lead.alternativeDomains && lead.alternativeDomains.length > 0) {
+    lead.alternativeDomains.slice(0, 2).forEach(altDomain => {
+      const domain = domains.find(d => d.domain === altDomain);
+      if (domain) {
+        recommendedDomainsList.push({
+          domain,
+          isPrimary: false,
+          fitScore: Math.max(0, (lead.fitScore || 0) - 10), // Slightly lower than primary
+        });
+      }
+    });
+  }
+  
+  // Fallback: if no recommendations, show top 3 available domains from search
+  const recommendedDomains = recommendedDomainsList.length > 0 
+    ? recommendedDomainsList 
+    : domains.filter(d => d.status === 'available').slice(0, 3).map(d => ({
+        domain: d,
+        isPrimary: false,
+        fitScore: 0,
+      }));
 
   const fitReasons = [
     `Exact geo-service match for "${lead.city}" + "${lead.niche}"`,
@@ -143,11 +180,18 @@ export default function ProspectDetail() {
               <h3 className="font-display font-semibold">Outreach Angle</h3>
               <div className="mt-3 rounded-lg bg-secondary/50 p-4 text-sm text-muted-foreground leading-relaxed">
                 <p>Hi, I noticed {lead.name} has strong reviews ({lead.rating}★, {lead.reviewCount} reviews) but {lead.website ? 'could benefit from a stronger domain' : 'doesn\'t have a website yet'}.
-                I have {lead.recommendedDomain || 'a premium geo-service domain'} available — an exact match for {lead.niche} in {lead.city}.
-                Would you be interested in discussing how it could help your online presence?</p>
+                {lead.recommendedDomain ? (
+                  <> I have <span className="font-semibold text-primary">{lead.recommendedDomain}</span> available — an exact match for {lead.niche} in {lead.city}.</>
+                ) : (
+                  <> A premium geo-service domain like {lead.city.toLowerCase()}{lead.niche.replace(/\s+/g, '')}.com could significantly improve your online presence.</>
+                )}
+                {' '}Would you be interested in discussing how it could help your local SEO and brand recognition?</p>
               </div>
               <Button variant="outline" size="sm" className="mt-3 text-xs"
-                onClick={() => navigator.clipboard.writeText(`Hi, I noticed ${lead.name} has strong reviews...`)}>
+                onClick={() => {
+                  const message = `Hi, I noticed ${lead.name} has strong reviews (${lead.rating}★, ${lead.reviewCount} reviews) but ${lead.website ? 'could benefit from a stronger domain' : 'doesn\'t have a website yet'}. ${lead.recommendedDomain ? `I have ${lead.recommendedDomain} available — an exact match for ${lead.niche} in ${lead.city}.` : `A premium geo-service domain could significantly improve your online presence.`} Would you be interested in discussing how it could help your local SEO and brand recognition?`;
+                  navigator.clipboard.writeText(message);
+                }}>
                 <Copy className="mr-1 h-3 w-3" /> Copy outreach angle
               </Button>
             </div>
@@ -207,17 +251,33 @@ export default function ProspectDetail() {
             {/* Recommended Domains */}
             <div className="rounded-2xl border border-border bg-card p-5 shadow-elegant">
               <h3 className="font-display font-semibold text-sm">Recommended Domains</h3>
-              <div className="mt-3 space-y-2">
-                {recommendedDomains.map(d => (
-                  <div key={d.id} className="flex items-center justify-between rounded-lg bg-secondary/50 px-3 py-2">
-                    <div>
-                      <p className="text-xs font-semibold">{d.domain}</p>
-                      <p className="text-[10px] text-muted-foreground">Score: {d.qualityScore}/100</p>
+              {recommendedDomains.length > 0 ? (
+                <div className="mt-3 space-y-2">
+                  {recommendedDomains.map((rec, idx) => (
+                    <div key={rec.domain.id} className="flex items-center justify-between rounded-lg bg-secondary/50 px-3 py-2">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs font-semibold">{rec.domain.domain}</p>
+                          {rec.isPrimary && (
+                            <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[9px] font-bold text-primary">
+                              BEST FIT
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground">
+                          Quality: {rec.domain.qualityScore}/100
+                          {rec.fitScore > 0 && ` • Fit: ${rec.fitScore}/100`}
+                        </p>
+                      </div>
+                      <div className={`h-2 w-2 rounded-full ${rec.domain.status === 'available' ? 'bg-success' : 'bg-warning'}`} />
                     </div>
-                    <div className="h-2 w-2 rounded-full bg-success" />
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="mt-3 text-xs text-muted-foreground">
+                  No specific recommendations yet. Domain matching in progress...
+                </p>
+              )}
             </div>
 
             {/* Map Placeholder */}

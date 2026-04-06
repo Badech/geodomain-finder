@@ -95,6 +95,7 @@ export function BusinessTable({ leads, onViewDetail }: { leads: BusinessLead[]; 
           <tr className="border-b border-border bg-secondary/30">
             <th className="px-4 py-3 text-left font-display font-semibold text-xs text-muted-foreground">Business</th>
             <th className="px-4 py-3 text-left font-display font-semibold text-xs text-muted-foreground hidden md:table-cell">Phone</th>
+            <th className="px-4 py-3 text-left font-display font-semibold text-xs text-muted-foreground hidden lg:table-cell">Email</th>
             <th className="px-4 py-3 text-left font-display font-semibold text-xs text-muted-foreground hidden lg:table-cell">Website</th>
             <th className="px-4 py-3 text-center font-display font-semibold text-xs text-muted-foreground">Rating</th>
             <th className="px-4 py-3 text-center font-display font-semibold text-xs text-muted-foreground">Buyer Score</th>
@@ -111,6 +112,7 @@ export function BusinessTable({ leads, onViewDetail }: { leads: BusinessLead[]; 
                 <p className="text-xs text-muted-foreground">{lead.city}, {lead.state}</p>
               </td>
               <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{lead.phone}</td>
+              <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs truncate max-w-[180px]">{lead.email || '—'}</td>
               <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs truncate max-w-[180px]">{lead.currentDomain || '—'}</td>
               <td className="px-4 py-3 text-center">
                 <span className="inline-flex items-center gap-1">
@@ -136,9 +138,11 @@ export function BusinessTable({ leads, onViewDetail }: { leads: BusinessLead[]; 
                 </span>
               </td>
               <td className="px-4 py-3 text-right">
-                <Button size="sm" variant="ghost" onClick={() => onViewDetail(lead.id)} className="text-xs">
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </Button>
+                <a href={`/prospect/${lead.id}`} target="_blank" rel="noopener noreferrer">
+                  <Button size="sm" variant="ghost" className="text-xs">
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                </a>
               </td>
             </tr>
           ))}
