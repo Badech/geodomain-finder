@@ -39,8 +39,16 @@ export function BusinessCard({ lead }: { lead: BusinessLead }) {
 
       <div className="mt-3 space-y-1.5">
         <CopyableField icon={<Phone className="h-3.5 w-3.5" />} value={lead.phone} />
-        {lead.email && <CopyableField icon={<Mail className="h-3.5 w-3.5" />} value={lead.email} />}
-        {lead.website && <CopyableField icon={<Globe className="h-3.5 w-3.5" />} value={lead.website} />}
+        <CopyableField 
+          icon={<Mail className="h-3.5 w-3.5" />} 
+          value={lead.email || 'Unavailable'} 
+          isUnavailable={!lead.email || lead.email === 'Unavailable'}
+        />
+        <CopyableField 
+          icon={<Globe className="h-3.5 w-3.5" />} 
+          value={lead.website || 'Unavailable'} 
+          isUnavailable={!lead.website || lead.website === 'Unavailable'}
+        />
       </div>
 
       <div className="mt-4 flex items-center justify-between">
@@ -58,30 +66,37 @@ export function BusinessCard({ lead }: { lead: BusinessLead }) {
         </Button>
       </div>
 
-      {lead.recommendedDomain && (
-        <div className="mt-3 rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
-          <p className="text-[10px] text-muted-foreground">Recommended Domain</p>
-          <p className="text-sm font-semibold text-primary">{lead.recommendedDomain}</p>
-        </div>
-      )}
+      <div className="mt-3 rounded-lg bg-primary/5 border border-primary/10 px-3 py-2">
+        <p className="text-[10px] text-muted-foreground">Recommended Domain</p>
+        <p className={`text-sm font-semibold ${lead.recommendedDomain && lead.recommendedDomain !== 'Not assigned yet' ? 'text-primary' : 'text-muted-foreground'}`}>
+          {lead.recommendedDomain || 'Not assigned yet'}
+        </p>
+      </div>
     </div>
   );
 }
 
-export function CopyableField({ icon, value }: { icon: React.ReactNode; value: string }) {
+export function CopyableField({ icon, value, isUnavailable }: { 
+  icon: React.ReactNode; 
+  value: string; 
+  isUnavailable?: boolean;
+}) {
   const [copied, setCopied] = useState(false);
   const copy = () => {
+    if (isUnavailable) return; // Don't copy if unavailable
     navigator.clipboard.writeText(value);
     setCopied(true);
     setTimeout(() => setCopied(false), 1500);
   };
   return (
-    <div className="group flex items-center gap-2 text-xs text-muted-foreground">
+    <div className={`group flex items-center gap-2 text-xs ${isUnavailable ? 'text-muted-foreground/50' : 'text-muted-foreground'}`}>
       {icon}
       <span className="truncate">{value}</span>
-      <button onClick={copy} className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto shrink-0">
-        {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
-      </button>
+      {!isUnavailable && (
+        <button onClick={copy} className="opacity-0 group-hover:opacity-100 transition-opacity ml-auto shrink-0">
+          {copied ? <Check className="h-3 w-3 text-success" /> : <Copy className="h-3 w-3" />}
+        </button>
+      )}
     </div>
   );
 }
@@ -112,8 +127,30 @@ export function BusinessTable({ leads, onViewDetail }: { leads: BusinessLead[]; 
                 <p className="text-xs text-muted-foreground">{lead.city}, {lead.state}</p>
               </td>
               <td className="px-4 py-3 hidden md:table-cell text-muted-foreground">{lead.phone}</td>
-              <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs truncate max-w-[180px]">{lead.email || '—'}</td>
-              <td className="px-4 py-3 hidden lg:table-cell text-muted-foreground text-xs truncate max-w-[180px]">{lead.currentDomain || '—'}</td>
+              <td className="px-4 py-3 hidden lg:table-cell text-xs truncate max-w-[180px]">
+                {lead.email && lead.email !== 'Unavailable' ? (
+                  <a href={`mailto:${lead.email}`} className="text-primary hover:underline">
+                    {lead.email}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground/50 italic">Unavailable</span>
+                )}
+              </td>
+              <td className="px-4 py-3 hidden lg:table-cell text-xs truncate max-w-[180px]">
+                {lead.website && lead.website !== 'Unavailable' ? (
+                  <a 
+                    href={lead.website.startsWith('http') ? lead.website : `https://${lead.website}`} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="text-primary hover:underline inline-flex items-center gap-1"
+                  >
+                    {lead.website}
+                    <ExternalLink className="h-3 w-3 shrink-0" />
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground/50 italic">Unavailable</span>
+                )}
+              </td>
               <td className="px-4 py-3 text-center">
                 <span className="inline-flex items-center gap-1">
                   <Star className="h-3 w-3 text-accent fill-accent" /> {lead.rating}
@@ -128,8 +165,10 @@ export function BusinessTable({ leads, onViewDetail }: { leads: BusinessLead[]; 
                 </div>
               </td>
               <td className="px-4 py-3 hidden xl:table-cell">
-                {lead.recommendedDomain && (
+                {lead.recommendedDomain && lead.recommendedDomain !== 'Not assigned yet' ? (
                   <span className="text-xs font-medium text-primary">{lead.recommendedDomain}</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground/50 italic">Not assigned yet</span>
                 )}
               </td>
               <td className="px-4 py-3 text-center">
@@ -138,7 +177,7 @@ export function BusinessTable({ leads, onViewDetail }: { leads: BusinessLead[]; 
                 </span>
               </td>
               <td className="px-4 py-3 text-right">
-                <a href={`/prospect/${lead.id}`} target="_blank" rel="noopener noreferrer">
+                <a href={`/prospect/${lead.placeId || lead.id}`} target="_blank" rel="noopener noreferrer">
                   <Button size="sm" variant="ghost" className="text-xs">
                     <ExternalLink className="h-3.5 w-3.5" />
                   </Button>

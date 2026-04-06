@@ -51,6 +51,7 @@ export interface CurrentDomainAnalysis {
  * Higher score = more likely to buy a premium domain
  */
 export function calculateBuyerScore(lead: BusinessLead): ScoredBusinessLead {
+  // Preserve all original fields including id
   let score = 0;
   const reasons: string[] = [];
   

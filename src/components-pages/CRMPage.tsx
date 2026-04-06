@@ -87,15 +87,13 @@ export default function CRMPage() {
                                       <p className="flex items-center gap-1 text-[10px] text-muted-foreground">
                                         <Phone className="h-2.5 w-2.5" /> {lead.phone}
                                       </p>
-                                      {lead.email && (
-                                        <p className="flex items-center gap-1 text-[10px] text-muted-foreground truncate">
-                                          <Mail className="h-2.5 w-2.5" /> {lead.email}
-                                        </p>
-                                      )}
+                                      <p className={`flex items-center gap-1 text-[10px] truncate ${lead.email && lead.email !== 'Unavailable' ? 'text-muted-foreground' : 'text-muted-foreground/50'}`}>
+                                        <Mail className="h-2.5 w-2.5" /> {lead.email || 'Unavailable'}
+                                      </p>
                                     </div>
-                                    {lead.recommendedDomain && (
-                                      <p className="mt-2 text-[10px] font-semibold text-primary truncate">{lead.recommendedDomain}</p>
-                                    )}
+                                    <p className={`mt-2 text-[10px] truncate ${lead.recommendedDomain && lead.recommendedDomain !== 'Not assigned yet' ? 'font-semibold text-primary' : 'italic text-muted-foreground/50'}`}>
+                                      {lead.recommendedDomain || 'Not assigned yet'}
+                                    </p>
                                     <div className="mt-2 flex items-center justify-between">
                                       <div className="flex items-center gap-1">
                                         <Star className="h-3 w-3 text-accent fill-accent" />

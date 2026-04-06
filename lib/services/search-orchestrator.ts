@@ -4,6 +4,11 @@
  */
 
 import { generateDomainCandidates, DomainCandidate } from './domain-generator';
+
+// Re-export for use in API routes
+export { generateDomainCandidates } from './domain-generator';
+export { scoreBusinessLeads } from './business-matcher';
+export type { DomainCandidate } from './domain-generator';
 import { 
   scoreBusinessLeads, 
   matchDomainsToBusinesses, 
@@ -25,8 +30,9 @@ export interface SearchInput {
   city: string;
   state: string;
   modifiers?: string[];
-  maxDomains?: number;
-  maxBusinesses?: number;
+  domainGenerationMode?: 'standard' | 'expanded' | 'exhaustive';
+  initialDomainBatch?: number; // Number of domains to check immediately (default: 30)
+  initialBusinessBatch?: number; // Number of businesses to enrich immediately (default: 20)
 }
 
 export interface SearchProgress {
@@ -106,7 +112,21 @@ export interface SearchResult {
     totalBusinesses: number;
     totalMatches: number;
     executionTime: number;
+    totalGenerated?: number; // Total domains generated
+    domainsChecked?: number; // Domains checked for availability
+    domainsUnchecked?: number; // Domains not yet checked
+    businessesFound?: number; // Total businesses found
+    businessesEnriched?: number; // Businesses enriched
+    businessesUnenriched?: number; // Businesses not yet enriched
   };
+  unenrichedBusinesses?: Array<{
+    id: string;
+    name: string;
+    city: string;
+    state: string;
+    rating: number;
+    buyerScore: number;
+  }>;
 }
 
 export type ProgressCallback = (progress: SearchProgress) => void;
@@ -136,15 +156,28 @@ export class SearchOrchestrator {
       this.reportProgress(onProgress, 'validating', 'Validating search parameters...', 5);
       this.validateInput(input);
 
-      // Stage 2: Generate domain candidates
+      // Stage 2: Generate domain candidates (NO LIMIT)
       this.reportProgress(onProgress, 'generating', 'Generating domain suggestions...', 15);
-      const domainCandidates = generateDomainCandidates({
+      const allDomainCandidates = generateDomainCandidates({
         niche: input.niche,
         city: input.city,
         state: input.state,
         modifiers: input.modifiers,
-        maxResults: input.maxDomains || 20,
+        mode: input.domainGenerationMode || 'expanded', // Default to expanded mode
+        initialBatchSize: input.initialDomainBatch || 30,
       });
+      
+      console.log(`[Search] 📊 Generated ${allDomainCandidates.length} total domain candidates`);
+      
+      // Split into batches for progressive availability checking
+      const initialBatchSize = input.initialDomainBatch || 30;
+      const domainCandidates = allDomainCandidates.slice(0, initialBatchSize);
+      const remainingCandidates = allDomainCandidates.slice(initialBatchSize);
+      
+      console.log(`[Search] ⚡ Checking first ${domainCandidates.length} domains immediately`);
+      if (remainingCandidates.length > 0) {
+        console.log(`[Search] 📦 ${remainingCandidates.length} additional candidates available for later batches`);
+      }
 
       // Stage 3 & 4: Check domains AND search businesses IN PARALLEL (Phase 4 optimization)
       this.reportProgress(onProgress, 'checking', 'Checking domain availability...', 30);
@@ -161,19 +194,29 @@ export class SearchOrchestrator {
       this.reportProgress(onProgress, 'searching', 'Analyzing businesses...', 60);
       const scoredBusinesses = scoreBusinessLeads(businesses);
 
-      // Stage 6: Enrich ONLY top businesses (Phase 4 optimization - smart enrichment)
+      console.log(`[Search] 📊 Found ${scoredBusinesses.length} businesses total`);
+
+      // Stage 6: Progressive enrichment - enrich initial batch, keep rest for later
       this.reportProgress(onProgress, 'enriching', 'Enriching top prospects...', 70);
       
-      // Only enrich top 10 businesses to speed up initial results
-      const topBusinesses = scoredBusinesses.slice(0, 10);
-      const remainingBusinesses = scoredBusinesses.slice(10);
+      const initialBusinessBatch = input.initialBusinessBatch || 20;
+      const businessesToEnrich = scoredBusinesses.slice(0, initialBusinessBatch);
+      const remainingBusinesses = scoredBusinesses.slice(initialBusinessBatch);
       
-      const enrichedTop = await this.enrichBusinessData(topBusinesses);
+      console.log(`[Search] ⚡ Enriching first ${businessesToEnrich.length} businesses immediately`);
+      if (remainingBusinesses.length > 0) {
+        console.log(`[Search] 📦 ${remainingBusinesses.length} additional businesses available for later enrichment`);
+      }
       
-      // Remaining businesses stay unenriched (can be enriched on demand later)
+      const enrichedBatch = await this.enrichBusinessData(businessesToEnrich);
+      
+      // Normalize remaining businesses with proper fallbacks
+      const normalizedRemaining = remainingBusinesses.map(b => this.normalizeBusinessLead(b));
+      
+      // Combine enriched and unenriched (with fallbacks)
       const enrichedBusinesses = [
-        ...enrichedTop,
-        ...remainingBusinesses.map(b => ({ ...b } as EnrichedBusinessLead))
+        ...enrichedBatch,
+        ...normalizedRemaining
       ];
 
       // Stage 7: Match domains to businesses
@@ -225,6 +268,27 @@ export class SearchOrchestrator {
 
       const executionTime = Date.now() - startTime;
 
+      // Log enhanced performance summary
+      const availableCount = domains.filter(d => d.status === 'available').length;
+      const takenCount = domains.filter(d => d.status === 'taken').length;
+      const premiumCount = domains.filter(d => d.status === 'premium').length;
+      
+      console.log(`\n[Search] ✅ Search complete in ${(executionTime / 1000).toFixed(1)}s`);
+      console.log(`[Search] 📊 Domain Generation:`);
+      console.log(`[Search]    - Total generated: ${allDomainCandidates.length}`);
+      console.log(`[Search]    - Checked for availability: ${domainCandidates.length}`);
+      console.log(`[Search]    - Unchecked (available for load-more): ${remainingCandidates.length}`);
+      console.log(`[Search] 🎯 Domain Availability:`);
+      console.log(`[Search]    - Available: ${availableCount}/${domains.length}`);
+      console.log(`[Search]    - Taken: ${takenCount}/${domains.length}`);
+      console.log(`[Search]    - Premium: ${premiumCount}/${domains.length}`);
+      console.log(`[Search] 🏢 Business Results:`);
+      console.log(`[Search]    - Total found: ${scoredBusinesses.length}`);
+      console.log(`[Search]    - Enriched: ${businessesToEnrich.length}`);
+      console.log(`[Search]    - Unenriched (available for load-more): ${remainingBusinesses.length}`);
+      console.log(`[Search]    - With email: ${enrichedBusinesses.filter(b => b.email && b.email !== 'Unavailable').length}/${enrichedBusinesses.length}`);
+      console.log(`[Search]    - Matches found: ${matches.length}`);
+
       return {
         searchQueryId,
         domains,
@@ -237,7 +301,28 @@ export class SearchOrchestrator {
           totalBusinesses: enrichedBusinesses.length,
           totalMatches: matches.length,
           executionTime,
+          totalGenerated: allDomainCandidates.length,
+          domainsChecked: domainCandidates.length,
+          domainsUnchecked: remainingCandidates.length,
+          businessesFound: scoredBusinesses.length,
+          businessesEnriched: businessesToEnrich.length,
+          businessesUnenriched: remainingBusinesses.length,
         },
+        // Include unchecked candidates for potential pagination/load-more
+        uncheckedDomains: remainingCandidates.map(c => ({
+          domain: c.domain,
+          qualityScore: c.qualityScore,
+          pattern: c.pattern,
+        })),
+        // Include unenriched businesses for potential progressive enrichment
+        unenrichedBusinesses: remainingBusinesses.map(b => ({
+          id: b.id,
+          name: b.name,
+          city: b.city,
+          state: b.state,
+          rating: b.rating,
+          buyerScore: b.buyerScore || b.prospectScore || 50,
+        })),
       };
     } catch (error) {
       this.reportProgress(onProgress, 'complete', 'Search failed', 0);
@@ -275,10 +360,20 @@ export class SearchOrchestrator {
   private async checkDomainAvailability(
     candidates: DomainCandidate[]
   ): Promise<DomainOpportunity[]> {
+    const startTime = Date.now();
     const domainStrings = candidates.map(c => c.domain);
+    
+    console.log(`[Availability] Checking ${domainStrings.length} domains...`);
     
     try {
       const results = await this.domainProvider.checkAvailability(domainStrings);
+      
+      const checkTime = Date.now() - startTime;
+      const available = results.filter(r => r.status === 'available').length;
+      const taken = results.filter(r => r.status === 'taken').length;
+      const errors = results.filter(r => r.status === 'error').length;
+      
+      console.log(`[Availability] ✅ Completed in ${(checkTime / 1000).toFixed(1)}s: ${available} available, ${taken} taken, ${errors} errors`);
       
       return candidates.map(candidate => {
         const availabilityResult = results.find(r => r.domain === candidate.domain);
@@ -319,12 +414,16 @@ export class SearchOrchestrator {
    * Search for businesses using lead provider
    */
   private async searchBusinesses(input: SearchInput): Promise<BusinessLead[]> {
+    const startTime = Date.now();
+    console.log(`[BusinessSearch] Searching: ${input.niche} in ${input.city}, ${input.state}`);
+    
     try {
+      // Remove hard limit - get as many businesses as provider returns
       const leads = await this.leadProvider.searchBusinesses({
         niche: input.niche,
         city: input.city,
         state: input.state,
-        maxResults: input.maxBusinesses || 20,
+        maxResults: 60, // Increased from 20 to get more comprehensive results
       });
 
       return leads.map(lead => ({
@@ -335,7 +434,7 @@ export class SearchOrchestrator {
         city: lead.city,
         state: lead.state,
         phone: lead.phone,
-        email: undefined,
+        email: lead.email, // Keep email if provided by the lead provider
         website: lead.website,
         address: lead.address,
         rating: lead.rating || 0,
@@ -343,7 +442,15 @@ export class SearchOrchestrator {
         currentDomain: lead.website,
         status: 'new',
         tags: [],
+        // Phase 3: Include coordinates if available
+        latitude: lead.latitude,
+        longitude: lead.longitude,
       }));
+      
+      const searchTime = Date.now() - startTime;
+      console.log(`[BusinessSearch] ✅ Found ${leads.length} businesses in ${(searchTime / 1000).toFixed(1)}s`);
+      
+      return leads;
     } catch (error) {
       console.error('Business search failed:', error);
       return []; // Return empty array on failure
@@ -360,39 +467,106 @@ export class SearchOrchestrator {
   private async enrichBusinessData(
     businesses: ScoredBusinessLead[]
   ): Promise<EnrichedBusinessLead[]> {
+    const startTime = Date.now();
     const CONCURRENCY_LIMIT = 5; // Process 5 businesses at a time
+    const TIMEOUT_PER_BUSINESS = 8000; // 8 seconds max per business
     const enriched: EnrichedBusinessLead[] = [];
     
-    // Process in batches for better performance
+    const withWebsite = businesses.filter(b => b.website);
+    const withoutWebsite = businesses.filter(b => !b.website);
+    
+    console.log(`[Enrichment] Starting enrichment for ${withWebsite.length}/${businesses.length} businesses with websites`);
+    
+    // Process in batches for better performance with timeout
     for (let i = 0; i < businesses.length; i += CONCURRENCY_LIMIT) {
       const batch = businesses.slice(i, i + CONCURRENCY_LIMIT);
       
       const batchResults = await Promise.all(
-        batch.map(business => this.enrichSingleBusiness(business))
+        batch.map(business => 
+          this.enrichSingleBusinessWithTimeout(business, TIMEOUT_PER_BUSINESS)
+        )
       );
       
       enriched.push(...batchResults);
     }
     
+    const enrichmentTime = Date.now() - startTime;
+    const enrichedCount = enriched.filter(b => b.email).length;
+    console.log(`[Enrichment] ✅ Completed in ${(enrichmentTime / 1000).toFixed(1)}s: Found emails for ${enrichedCount}/${withWebsite.length} businesses`);
+    
     return enriched;
+  }
+
+  /**
+   * Normalize business lead with proper fallbacks
+   * Ensures no fields appear blank or broken in UI
+   */
+  private normalizeBusinessLead(business: ScoredBusinessLead): EnrichedBusinessLead {
+    return {
+      ...business,
+      email: business.email || 'Unavailable',
+      website: business.website || 'Unavailable',
+      recommendedDomain: business.recommendedDomain || 'Not assigned yet',
+      alternativeDomains: business.alternativeDomains || [],
+      fitScore: business.fitScore || 0,
+      fitReasons: business.fitReasons || [],
+      status: business.status || 'new',
+    };
+  }
+
+  /**
+   * Enrich a single business with timeout protection
+   */
+  private async enrichSingleBusinessWithTimeout(
+    business: ScoredBusinessLead,
+    timeoutMs: number
+  ): Promise<EnrichedBusinessLead> {
+    const enrichmentPromise = this.enrichSingleBusiness(business);
+    const timeoutPromise = new Promise<EnrichedBusinessLead>((resolve) => {
+      setTimeout(() => {
+        console.warn(`[Enrichment] ⏱️ Timeout for ${business.name} after ${timeoutMs}ms`);
+        resolve({ ...business } as EnrichedBusinessLead);
+      }, timeoutMs);
+    });
+
+    return Promise.race([enrichmentPromise, timeoutPromise]);
   }
 
   /**
    * PHASE 4: Enriches a single business with email and website audit
    */
   private async enrichSingleBusiness(business: ScoredBusinessLead): Promise<EnrichedBusinessLead> {
-    const enrichedBusiness: EnrichedBusinessLead = { ...business };
+    const enrichedBusiness: EnrichedBusinessLead = { 
+      ...business,
+      // Set fallback values for fields that might not be enriched
+      email: business.email || 'Unavailable',
+      website: business.website || 'Unavailable',
+      recommendedDomain: business.recommendedDomain || 'Not assigned yet',
+      alternativeDomains: business.alternativeDomains || [],
+      fitScore: business.fitScore || 0,
+      fitReasons: business.fitReasons || [],
+      status: business.status || 'new',
+    };
     
     // Only attempt enrichment if business has a website
-    if (!business.website) {
+    if (!business.website || business.website === 'Unavailable') {
       return enrichedBusiness;
     }
 
     try {
-      // Run email extraction and website audit in parallel
+      // Run email extraction and website audit in parallel with individual timeouts
+      const EMAIL_TIMEOUT = 6000; // 6 seconds for email
+      const AUDIT_TIMEOUT = 5000; // 5 seconds for audit
+      
       const [emailResult, auditResult] = await Promise.allSettled([
-        this.emailExtractor.extractPublicEmails(business.website),
-        this.auditWebsiteIfAvailable(business),
+        Promise.race([
+          this.emailExtractor.extractPublicEmails(business.website),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Email timeout')), EMAIL_TIMEOUT))
+        ]),
+        Promise.race([
+          this.auditWebsiteIfAvailable(business),
+          new Promise((_, reject) => setTimeout(() => reject(new Error('Audit timeout')), AUDIT_TIMEOUT))
+        ]),
       ]);
 
       // Process email result
@@ -405,6 +579,7 @@ export class SearchOrchestrator {
           sourceType: emailResult.value.sourceType,
         };
         
+        // Only update email if actually found, otherwise keep "Unavailable"
         if (emailResult.value.email) {
           enrichedBusiness.email = emailResult.value.email;
         }
@@ -415,8 +590,7 @@ export class SearchOrchestrator {
         enrichedBusiness.websiteAudit = auditResult.value;
       }
     } catch (error) {
-      console.error(`Enrichment failed for ${business.name}:`, error);
-      // Continue without enrichment
+      // Silent fail - continue with fallback values
     }
     
     return enrichedBusiness;

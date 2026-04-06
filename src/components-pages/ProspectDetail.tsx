@@ -1,27 +1,40 @@
 import { useState } from 'react';
 import { useNavigate, useParams } from '@/lib/navigation';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Globe, Phone, Mail, MapPin, Star, ExternalLink, Copy, Check, MessageSquare, Tag, Send } from 'lucide-react';
+import { ArrowLeft, Globe, Phone, Mail, MapPin, Star, ExternalLink, Copy, Check, MessageSquare, Tag, Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { useAppState } from '@/hooks/useAppState';
+import { useBusinessLead } from '../hooks/useBusinessLead';
 import { CopyableField } from '@/components/BusinessCard';
+import { BusinessMap } from '@/components/BusinessMap';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { LeadStatus } from '@/types';
 
 export default function ProspectDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { businesses, activityNotes, addNote, updateLeadStatus, domains } = useAppState();
+  const { activityNotes, addNote, updateLeadStatus, domains } = useAppState();
+  const { lead, loading, error } = useBusinessLead(id);
   const [noteText, setNoteText] = useState('');
 
-  const lead = businesses.find(b => b.id === id);
-  if (!lead) {
+  if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="text-center">
-          <p className="font-display text-xl font-bold">Prospect not found</p>
+          <Loader2 className="h-8 w-8 animate-spin text-primary mx-auto" />
+          <p className="mt-4 text-sm text-muted-foreground">Loading business details...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !lead) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-center">
+          <p className="font-display text-xl font-bold">{error || 'Prospect not found'}</p>
           <Button variant="outline" className="mt-4" onClick={() => navigate('/dashboard')}>Back to Dashboard</Button>
         </div>
       </div>
@@ -280,11 +293,13 @@ export default function ProspectDetail() {
               )}
             </div>
 
-            {/* Map Placeholder */}
-            <div className="rounded-2xl border border-border bg-secondary/30 p-5 flex flex-col items-center justify-center h-48">
-              <MapPin className="h-8 w-8 text-muted-foreground/30" />
-              <p className="mt-2 text-xs text-muted-foreground">Map view coming soon</p>
-            </div>
+            {/* Business Location Map */}
+            <BusinessMap 
+              latitude={lead.latitude || 0}
+              longitude={lead.longitude || 0}
+              businessName={lead.name}
+              address={lead.address}
+            />
           </div>
         </div>
       </div>

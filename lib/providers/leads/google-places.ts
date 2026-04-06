@@ -24,9 +24,11 @@ export class GooglePlacesProvider extends BaseLeadProvider {
     const { niche, city, state, maxResults = 20 } = params;
 
     try {
-      // Use Text Search to find businesses
+      // Use Text Search to find businesses with improved query
       const query = `${niche} in ${city}, ${state}`;
       const url = `${this.baseUrl}/places:searchText`;
+
+      console.log(`[GooglePlaces] Searching: "${query}"`);
 
       const response = await fetch(url, {
         method: 'POST',
@@ -55,6 +57,8 @@ export class GooglePlacesProvider extends BaseLeadProvider {
 
       const data = await response.json();
       const places = data.places || [];
+
+      console.log(`[GooglePlaces] Found ${places.length} businesses for "${query}"`);
 
       return places.map((place: any) => this.mapToBusinessLeadSeed(place, city, state));
     } catch (error) {
@@ -116,6 +120,9 @@ export class GooglePlacesProvider extends BaseLeadProvider {
     const latitude = place.location?.latitude;
     const longitude = place.location?.longitude;
     
+    // Preserve full website URL, not just domain
+    const websiteUrl = place.websiteUri;
+    
     return {
       placeId: place.id,
       name: place.displayName?.text || 'Unknown Business',
@@ -123,7 +130,7 @@ export class GooglePlacesProvider extends BaseLeadProvider {
       city,
       state,
       phone: place.nationalPhoneNumber ? this.normalizePhone(place.nationalPhoneNumber) : undefined,
-      website: place.websiteUri ? this.extractDomain(place.websiteUri) : undefined,
+      website: websiteUrl, // Keep full URL
       rating: place.rating || undefined,
       reviewCount: place.userRatingCount || undefined,
       // Phase 3: Add coordinates for map
@@ -137,7 +144,7 @@ export class GooglePlacesProvider extends BaseLeadProvider {
     const city = this.extractAddressComponent(addressComponents, 'locality') || '';
     const state = this.extractAddressComponent(addressComponents, 'administrative_area_level_1') || '';
 
-    const website = place.websiteUri;
+    const websiteUrl = place.websiteUri;
     
     // Extract location coordinates if available
     const latitude = place.location?.latitude;
@@ -150,8 +157,8 @@ export class GooglePlacesProvider extends BaseLeadProvider {
       city,
       state,
       phone: place.nationalPhoneNumber ? this.normalizePhone(place.nationalPhoneNumber) : undefined,
-      website: website ? this.extractDomain(website) : undefined,
-      currentDomain: website ? this.extractDomain(website) : undefined,
+      website: websiteUrl, // Full website URL for clickable links and email extraction
+      currentDomain: websiteUrl ? this.extractDomain(websiteUrl) : undefined, // Normalized domain for display/matching
       rating: place.rating || undefined,
       reviewCount: place.userRatingCount || undefined,
       // Phase 3: Add coordinates for map

@@ -7,7 +7,9 @@ import { createEmailExtractor } from './email';
  * Get provider configuration from environment variables
  */
 export function getProviderConfig(): ProviderConfig {
-  const demoMode = process.env.DEMO_MODE === 'true' || process.env.NODE_ENV === 'development';
+  const demoMode = process.env.DEMO_MODE === 'true';
+  
+  console.log('[Provider Config] DEMO_MODE:', process.env.DEMO_MODE, 'Using mock providers:', demoMode);
   
   return {
     domain: {

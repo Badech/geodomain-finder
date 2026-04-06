@@ -1,3 +1,5 @@
+import { generateNaturalVariants, singularize, isNaturalDomainWord } from '../utils/inflection';
+
 /**
  * Domain Generation Service
  * Generates domain name candidates based on niche, city, state, and modifiers
@@ -14,112 +16,210 @@ export interface DomainCandidate {
   pattern: string; // Track which pattern generated this domain
 }
 
+export type GenerationMode = 'standard' | 'expanded' | 'exhaustive';
+
 export interface DomainGenerationParams {
   niche: string;
   city: string;
   state: string;
   modifiers?: string[];
-  maxResults?: number;
+  mode?: GenerationMode;
+  initialBatchSize?: number; // For first display batch
 }
 
 /**
  * Niche variant mappings
  */
 const NICHE_VARIANTS: Record<string, string[]> = {
-  'car detailing': ['cardetailing', 'autodetailing', 'detailing', 'carwash', 'autowash'],
-  'roofing': ['roofing', 'roofer', 'roofrepair', 'roofingcompany', 'roofingservice'],
-  'hvac': ['hvac', 'heating', 'cooling', 'heatingandcooling', 'airconditioning', 'ac'],
-  'plumbing': ['plumbing', 'plumber', 'plumbingservice', 'plumbingcompany'],
-  'landscaping': ['landscaping', 'landscape', 'lawncare', 'gardening', 'yardwork'],
-  'electrician': ['electrician', 'electrical', 'electric', 'electricalservice'],
-  'pest control': ['pestcontrol', 'exterminator', 'bugcontrol', 'pestremoval'],
-  'cleaning': ['cleaning', 'cleaningservice', 'housecleaning', 'cleaners'],
+  'car detailing': ['cardetail', 'autodetail', 'detailing', 'cardetailing', 'autodetailing'],
+  'car': ['autodetail', 'cardetail', 'autocare', 'carcare', 'autoservice'],
+  'roofing': ['roof', 'roofing', 'roofer', 'roofpro', 'roofrepair'],
+  'hvac': ['hvac', 'heating', 'cooling', 'ac', 'climate'],
+  'plumbing': ['plumber', 'plumbing', 'plumbingpro', 'pipe', 'drain'],
+  'landscaping': ['landscape', 'landscaping', 'lawn', 'lawncare', 'yard'],
+  'electrician': ['electric', 'electrical', 'electrician', 'electricpro', 'wiring'],
+  'pest control': ['pest', 'pestcontrol', 'exterminator', 'bugcontrol', 'pestpro'],
+  'cleaning': ['clean', 'cleaning', 'cleaners', 'cleanpro', 'houseclean'],
+  'painting': ['paint', 'painting', 'painter', 'paintpro', 'paintservice'],
+  'flooring': ['floor', 'flooring', 'floors', 'floorpro', 'floorinstall'],
+  'windows': ['window', 'windows', 'windowpro', 'windowservice', 'glass'],
+  'garage door': ['garagedoor', 'garage', 'garagepro', 'doorservice'],
+  'concrete': ['concrete', 'cement', 'concretepro', 'concreteservice'],
+  'fencing': ['fence', 'fencing', 'fencepro', 'fenceservice'],
 };
 
 /**
  * Common domain modifiers/suffixes
  */
 const DOMAIN_SUFFIXES = [
+  'pro',
   'pros',
-  'experts',
-  'specialists',
+  'service',
   'services',
-  'company',
-  'solutions',
+  'co',
   'group',
+  'experts',
+  'solutions',
+  'team',
+  'local',
+  'direct',
+  'hub',
+  'zone',
+  'now',
+  'plus',
+];
+
+// Additional modifiers for expanded/exhaustive modes
+const EXPANDED_MODIFIERS = [
+  'best',
+  'top',
+  'premier',
+  'elite',
+  'prime',
+  'choice',
+  'certified',
+  'trusted',
+  'quality',
 ];
 
 /**
  * Generate domain candidates based on input parameters
+ * Returns all generated candidates (no hard limit)
  */
 export function generateDomainCandidates(params: DomainGenerationParams): DomainCandidate[] {
-  const { niche, city, state, modifiers = [], maxResults = 20 } = params;
+  const { niche, city, state, modifiers = [], mode = 'standard', initialBatchSize = 30 } = params;
   
   const candidates: DomainCandidate[] = [];
   const generated = new Set<string>();
+  const rejected: string[] = [];
   
   // Normalize inputs
   const cityNorm = normalizeForDomain(city);
   const stateNorm = normalizeForDomain(state);
   const nicheVariants = getNicheVariants(niche);
   
+  console.log(`[DomainGen] Generating domains for niche="${niche}" (${nicheVariants.length} variants), city="${city}", state="${state}"`);
+  console.log(`[DomainGen] Generation mode: ${mode}`);
+  console.log(`[DomainGen] Niche variants:`, nicheVariants);
+  
+  // Determine suffix limits based on mode
+  const suffixLimit = mode === 'exhaustive' ? DOMAIN_SUFFIXES.length : 
+                      mode === 'expanded' ? 8 : 4;
+  const variantLimit = mode === 'exhaustive' ? nicheVariants.length : 
+                       mode === 'expanded' ? Math.min(4, nicheVariants.length) : 
+                       Math.min(2, nicheVariants.length);
+  
   // Pattern 1: {city}{service}.com
   nicheVariants.forEach(nicheVariant => {
     const domain = `${cityNorm}${nicheVariant}.com`;
-    if (!generated.has(domain)) {
+    if (!generated.has(domain) && isDomainQualityAcceptable(domain)) {
       generated.add(domain);
       candidates.push(createCandidate(domain, 'exact-city-service', { city, niche, state }));
+    } else if (!isDomainQualityAcceptable(domain)) {
+      rejected.push(domain);
     }
   });
   
   // Pattern 2: {state}{service}.com
   nicheVariants.forEach(nicheVariant => {
     const domain = `${stateNorm}${nicheVariant}.com`;
-    if (!generated.has(domain)) {
+    if (!generated.has(domain) && isDomainQualityAcceptable(domain)) {
       generated.add(domain);
       candidates.push(createCandidate(domain, 'state-service', { city, niche, state }));
+    } else if (!isDomainQualityAcceptable(domain)) {
+      rejected.push(domain);
     }
   });
   
   // Pattern 3: {service}{city}.com
   nicheVariants.forEach(nicheVariant => {
     const domain = `${nicheVariant}${cityNorm}.com`;
-    if (!generated.has(domain)) {
+    if (!generated.has(domain) && isDomainQualityAcceptable(domain)) {
       generated.add(domain);
       candidates.push(createCandidate(domain, 'service-city', { city, niche, state }));
+    } else if (!isDomainQualityAcceptable(domain)) {
+      rejected.push(domain);
     }
   });
   
   // Pattern 4: {service}{state}.com
   nicheVariants.forEach(nicheVariant => {
     const domain = `${nicheVariant}${stateNorm}.com`;
-    if (!generated.has(domain)) {
+    if (!generated.has(domain) && isDomainQualityAcceptable(domain)) {
       generated.add(domain);
       candidates.push(createCandidate(domain, 'service-state', { city, niche, state }));
+    } else if (!isDomainQualityAcceptable(domain)) {
+      rejected.push(domain);
     }
   });
   
   // Pattern 5: {city}{service}{suffix}.com
-  nicheVariants.slice(0, 2).forEach(nicheVariant => {
-    DOMAIN_SUFFIXES.forEach(suffix => {
+  nicheVariants.slice(0, variantLimit).forEach(nicheVariant => {
+    DOMAIN_SUFFIXES.slice(0, suffixLimit).forEach(suffix => {
       const domain = `${cityNorm}${nicheVariant}${suffix}.com`;
-      if (!generated.has(domain)) {
+      if (!generated.has(domain) && isDomainQualityAcceptable(domain)) {
         generated.add(domain);
         candidates.push(createCandidate(domain, 'city-service-suffix', { city, niche, state }));
+      } else if (!isDomainQualityAcceptable(domain)) {
+        rejected.push(domain);
       }
     });
   });
   
   // Pattern 6: {service}{city}{suffix}.com
-  nicheVariants.slice(0, 2).forEach(nicheVariant => {
-    DOMAIN_SUFFIXES.slice(0, 3).forEach(suffix => {
+  nicheVariants.slice(0, variantLimit).forEach(nicheVariant => {
+    DOMAIN_SUFFIXES.slice(0, suffixLimit).forEach(suffix => {
       const domain = `${nicheVariant}${cityNorm}${suffix}.com`;
-      if (!generated.has(domain)) {
+      if (!generated.has(domain) && isDomainQualityAcceptable(domain)) {
         generated.add(domain);
         candidates.push(createCandidate(domain, 'service-city-suffix', { city, niche, state }));
+      } else if (!isDomainQualityAcceptable(domain)) {
+        rejected.push(domain);
       }
     });
   });
+  
+  // Pattern 7: {state}{service}{suffix}.com
+  nicheVariants.slice(0, variantLimit).forEach(nicheVariant => {
+    DOMAIN_SUFFIXES.slice(0, suffixLimit).forEach(suffix => {
+      const domain = `${stateNorm}${nicheVariant}${suffix}.com`;
+      if (!generated.has(domain) && isDomainQualityAcceptable(domain)) {
+        generated.add(domain);
+        candidates.push(createCandidate(domain, 'state-service-suffix', { city, niche, state }));
+      } else if (!isDomainQualityAcceptable(domain)) {
+        rejected.push(domain);
+      }
+    });
+  });
+  
+  // Pattern 8: {service}{state}{suffix}.com
+  nicheVariants.slice(0, variantLimit).forEach(nicheVariant => {
+    DOMAIN_SUFFIXES.slice(0, suffixLimit).forEach(suffix => {
+      const domain = `${nicheVariant}${stateNorm}${suffix}.com`;
+      if (!generated.has(domain) && isDomainQualityAcceptable(domain)) {
+        generated.add(domain);
+        candidates.push(createCandidate(domain, 'service-state-suffix', { city, niche, state }));
+      } else if (!isDomainQualityAcceptable(domain)) {
+        rejected.push(domain);
+      }
+    });
+  });
+  
+  // Pattern 9: {modifier}{city}{service}.com (expanded/exhaustive modes)
+  if (mode !== 'standard') {
+    const modifiersToUse = mode === 'exhaustive' ? EXPANDED_MODIFIERS : EXPANDED_MODIFIERS.slice(0, 3);
+    modifiersToUse.forEach(modifier => {
+      nicheVariants.slice(0, 2).forEach(nicheVariant => {
+        const domain = `${modifier}${cityNorm}${nicheVariant}.com`;
+        if (!generated.has(domain) && isDomainQualityAcceptable(domain)) {
+          generated.add(domain);
+          candidates.push(createCandidate(domain, 'modifier-city-service', { city, niche, state }));
+        } else if (!isDomainQualityAcceptable(domain)) {
+          rejected.push(domain);
+        }
+      });
+    });
+  }
   
   // Pattern 7: With custom modifiers
   if (modifiers.length > 0) {
@@ -135,10 +235,59 @@ export function generateDomainCandidates(params: DomainGenerationParams): Domain
     });
   }
   
-  // Sort by quality score and return top results
-  return candidates
-    .sort((a, b) => b.qualityScore - a.qualityScore)
-    .slice(0, maxResults);
+  // Log quality metrics
+  console.log(`[DomainGen] ✅ Generated: ${candidates.length} candidates, Rejected: ${rejected.length} low-quality`);
+  if (rejected.length > 0 && rejected.length <= 10) {
+    console.log(`[DomainGen] Sample rejected:`, rejected.slice(0, 10));
+  }
+  
+  // Sort by quality score (return ALL candidates sorted, no slicing)
+  const sortedCandidates = candidates.sort((a, b) => b.qualityScore - a.qualityScore);
+  
+  const avgQuality = sortedCandidates.length > 0 
+    ? (sortedCandidates.reduce((sum, c) => sum + c.qualityScore, 0) / sortedCandidates.length).toFixed(1)
+    : '0';
+    
+  console.log(`[DomainGen] 📊 Returning ALL ${sortedCandidates.length} candidates (avg quality: ${avgQuality})`);
+  console.log(`[DomainGen] 🎯 Top candidate: ${sortedCandidates[0]?.domain} (quality: ${sortedCandidates[0]?.qualityScore.toFixed(1)})`);
+  
+  return sortedCandidates;
+}
+
+/**
+ * Check if a domain passes basic quality checks
+ * Rejects obviously bad/awkward domain names
+ */
+function isDomainQualityAcceptable(domain: string): boolean {
+  const domainName = domain.replace('.com', '').toLowerCase();
+  
+  // Reject patterns that are almost always ugly
+  const rejectPatterns = [
+    /s{3,}/,           // triple 's' or more (carwashsservice)
+    /(.)\1{3,}/,       // any character repeated 4+ times
+    /[^a-z0-9]/,       // non-alphanumeric characters
+    /^.{1,2}$/,        // too short (< 3 chars)
+    /^.{40,}$/,        // too long (40+ chars)
+    /ings$/,           // -ings ending (cleanings, detailings - sounds forced)
+    /s{2}[a-z]+$/,     // double s in middle-end (carwashs, glasss)
+  ];
+  
+  for (const pattern of rejectPatterns) {
+    if (pattern.test(domainName)) {
+      return false;
+    }
+  }
+  
+  // Reject domains with awkward word combinations
+  // Check for unnatural service forms
+  const words = extractWords(domainName);
+  for (const word of words) {
+    if (!isNaturalDomainWord(word, 'service')) {
+      return false;
+    }
+  }
+  
+  return true;
 }
 
 /**
@@ -152,21 +301,19 @@ function getNicheVariants(niche: string): string[] {
     return NICHE_VARIANTS[lowerNiche];
   }
   
-  // Generate basic variants
+  // Generate natural variants using inflection helper
   const normalized = normalizeForDomain(niche);
-  const variants = [normalized];
+  const naturalVariants = generateNaturalVariants(normalized);
   
-  // Add singular/plural variants
-  if (normalized.endsWith('s')) {
-    variants.push(normalized.slice(0, -1));
-  } else {
-    variants.push(normalized + 's');
+  // Only add "service" variant for singular forms that sound natural
+  const withService: string[] = [];
+  const singular = singularize(normalized);
+  if (isNaturalDomainWord(singular + 'service', 'service')) {
+    withService.push(singular + 'service');
   }
   
-  // Add "service" variant
-  variants.push(normalized + 'service');
-  
-  return variants;
+  // Combine and deduplicate
+  return Array.from(new Set([...naturalVariants, ...withService])).slice(0, 4);
 }
 
 /**

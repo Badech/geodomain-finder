@@ -21,6 +21,14 @@ export interface SearchResult {
   };
 }
 
+export interface SearchProgressUpdate {
+  stage?: string;
+  status?: string;
+  progress?: number;
+  data?: any;
+  error?: string;
+}
+
 /**
  * Execute complete search via API
  */
@@ -54,6 +62,66 @@ export async function executeSearch(
   } catch (error) {
     console.error('Search API error:', error);
     throw error;
+  }
+}
+
+/**
+ * Execute progressive search with real-time updates via Server-Sent Events
+ */
+export async function executeSearchProgressive(
+  niche: string,
+  state: string,
+  city: string,
+  onProgress: (update: SearchProgressUpdate) => void,
+  modifiers?: string
+): Promise<void> {
+  const response = await fetch(`${API_BASE}/search/stream`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ niche, state, city, modifiers }),
+  });
+
+  if (!response.ok) {
+    throw new Error('Progressive search failed');
+  }
+
+  const reader = response.body?.getReader();
+  const decoder = new TextDecoder();
+
+  if (!reader) {
+    throw new Error('Response body is not readable');
+  }
+
+  try {
+    let buffer = '';
+    
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) break;
+
+      // Decode the chunk and add to buffer
+      buffer += decoder.decode(value, { stream: true });
+      
+      // Split by lines (SSE format)
+      const lines = buffer.split('\n');
+      
+      // Keep the last incomplete line in the buffer
+      buffer = lines.pop() || '';
+      
+      for (const line of lines) {
+        if (line.startsWith('data: ')) {
+          try {
+            const data = JSON.parse(line.slice(6));
+            onProgress(data);
+          } catch (e) {
+            console.error('Failed to parse SSE data:', e);
+          }
+        }
+      }
+    }
+  } finally {
+    reader.releaseLock();
   }
 }
 

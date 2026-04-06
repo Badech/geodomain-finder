@@ -14,8 +14,10 @@ export interface CacheEntry {
 export class DomainAvailabilityCache {
   private cache: Map<string, CacheEntry> = new Map();
   private defaultTTL: number;
+  private hitCount: number = 0;
+  private missCount: number = 0;
 
-  constructor(ttlMs: number = 24 * 60 * 60 * 1000) { // Default: 24 hours
+  constructor(ttlMs: number = 24 * 60 * 60 * 1000) { // Default: 24 hours for stable results
     this.defaultTTL = ttlMs;
   }
 
@@ -27,14 +29,19 @@ export class DomainAvailabilityCache {
     const entry = this.cache.get(normalized);
 
     if (!entry) {
+      this.missCount++;
       return null;
     }
 
     // Check if expired
     if (Date.now() > entry.expiresAt) {
       this.cache.delete(normalized);
+      this.missCount++;
       return null;
     }
+
+    // Track hit
+    this.hitCount++;
 
     // Return cached result with cache metadata
     return {
@@ -46,9 +53,17 @@ export class DomainAvailabilityCache {
 
   /**
    * Set cache entry for a domain
+   * Only cache reliable results - don't cache errors or unknown statuses
    */
   set(domain: string, result: DomainAvailabilityResult, ttlMs?: number): void {
     const normalized = this.normalizeDomain(domain);
+    
+    // Don't cache error or unknown statuses - these should be rechecked
+    if (result.status === 'error' || result.status === 'unknown') {
+      console.log(`[Cache] Not caching ${domain} with status: ${result.status}`);
+      return;
+    }
+    
     const ttl = ttlMs || this.defaultTTL;
     const timestamp = Date.now();
 
@@ -77,11 +92,18 @@ export class DomainAvailabilityCache {
 
   /**
    * Set multiple cache entries
+   * Returns the number of results actually cached
    */
-  setMultiple(results: DomainAvailabilityResult[], ttlMs?: number): void {
+  setMultiple(results: DomainAvailabilityResult[], ttlMs?: number): number {
+    let cached = 0;
     for (const result of results) {
+      const sizeBefore = this.cache.size;
       this.set(result.domain, result, ttlMs);
+      if (this.cache.size > sizeBefore) {
+        cached++;
+      }
     }
+    return cached;
   }
 
   /**
@@ -117,6 +139,9 @@ export class DomainAvailabilityCache {
     activeEntries: number;
     oldestEntry: number | null;
     newestEntry: number | null;
+    hitCount: number;
+    missCount: number;
+    hitRate: number;
   } {
     const now = Date.now();
     let expired = 0;
@@ -137,13 +162,27 @@ export class DomainAvailabilityCache {
       }
     }
 
+    const totalRequests = this.hitCount + this.missCount;
+    const hitRate = totalRequests > 0 ? (this.hitCount / totalRequests) * 100 : 0;
+
     return {
       totalEntries: this.cache.size,
       expiredEntries: expired,
       activeEntries: this.cache.size - expired,
       oldestEntry: oldest,
       newestEntry: newest,
+      hitCount: this.hitCount,
+      missCount: this.missCount,
+      hitRate: Math.round(hitRate * 10) / 10, // Round to 1 decimal
     };
+  }
+
+  /**
+   * Reset cache statistics
+   */
+  resetStats(): void {
+    this.hitCount = 0;
+    this.missCount = 0;
   }
 
   /**

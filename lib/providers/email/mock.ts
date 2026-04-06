@@ -10,45 +10,60 @@ export class MockEmailExtractor extends BaseEmailExtractor {
 
   async extractPublicEmails(websiteUrl: string): Promise<PublicEmailResult> {
     // Simulate network delay
-    await this.delay(500 + Math.random() * 500);
+    await this.delay(300 + Math.random() * 300);
 
     const normalizedUrl = this.normalizeUrl(websiteUrl);
     const domain = this.extractDomain(normalizedUrl);
 
-    // Simulate realistic scenarios:
-    // 30% - email found with high confidence
-    // 30% - email found with medium confidence
-    // 20% - email found with low confidence
-    // 20% - no email found
+    console.log(`[MockEmail] Extracting email from: ${websiteUrl}`);
+
+    // Simulate realistic scenarios with BETTER success rate:
+    // 40% - email found with high confidence
+    // 35% - email found with medium confidence
+    // 15% - email found with low confidence
+    // 10% - no email found
 
     const random = Math.random();
 
-    if (random < 0.3) {
+    if (random < 0.4) {
       // High confidence - domain-matched email
+      const email = `info@${domain}`;
+      console.log(`[MockEmail] Found: ${email} (high confidence)`);
       return {
-        email: `info@${domain}`,
+        email,
         source: `${normalizedUrl}/contact`,
         confidence: 'high',
         foundAt: new Date(),
+        classification: 'role-based',
+        sourceType: 'contact-page',
       };
-    } else if (random < 0.6) {
-      // Medium confidence - found on contact page but different domain
+    } else if (random < 0.75) {
+      // Medium confidence - contact email
+      const email = `contact@${domain}`;
+      console.log(`[MockEmail] Found: ${email} (medium confidence)`);
       return {
-        email: `contact@${domain.replace(/\..+$/, '')}.net`,
+        email,
         source: `${normalizedUrl}/about`,
         confidence: 'medium',
         foundAt: new Date(),
+        classification: 'role-based',
+        sourceType: 'about-page',
       };
-    } else if (random < 0.8) {
+    } else if (random < 0.9) {
       // Low confidence - generic email
+      const email = `hello@${domain}`;
+      console.log(`[MockEmail] Found: ${email} (low confidence)`);
       return {
-        email: `admin@${domain}`,
+        email,
         source: normalizedUrl,
         confidence: 'low',
         foundAt: new Date(),
+        classification: 'role-based',
+        sourceType: 'homepage',
       };
     } else {
       // No email found
+      console.log(`[MockEmail] No email found`);
       return {
         email: null,
         source: null,

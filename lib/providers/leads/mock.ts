@@ -14,9 +14,12 @@ export class MockLeadProvider extends BaseLeadProvider {
 
     const { niche, city, state, maxResults = 20 } = params;
 
+    console.log(`[MockProvider] Searching: "${niche}" in ${city}, ${state}`);
+
     // Generate mock businesses based on the search parameters
     const businesses: BusinessLeadSeed[] = [];
-    const count = Math.min(maxResults, 5 + Math.floor(Math.random() * 10));
+    // Return 80-100% of maxResults for better demo experience
+    const count = Math.max(10, Math.min(maxResults, Math.floor(maxResults * 0.8) + Math.floor(Math.random() * Math.floor(maxResults * 0.2))));
 
     const nicheKeywords = this.getNicheKeywords(niche);
     const businessSuffixes = ['Services', 'Pro', 'Solutions', 'Experts', 'Company', 'Group'];
@@ -24,11 +27,11 @@ export class MockLeadProvider extends BaseLeadProvider {
 
     for (let i = 0; i < count; i++) {
       const name = this.generateBusinessName(nicheKeywords, city, cityAbbr, businessSuffixes, i);
-      const hasWebsite = Math.random() > 0.3;
+      const hasWebsite = Math.random() > 0.2; // 80% have websites
       const website = hasWebsite ? this.generateWebsite(name, city) : undefined;
 
       businesses.push({
-        placeId: `mock_place_${city}_${niche}_${i}`,
+        placeId: `mock_place_${city.replace(/\s+/g, '_')}_${niche.replace(/\s+/g, '_').replace(/,/g, '')}_${i}`,
         name,
         address: `${100 + i * 50} ${this.getStreetName(i)} St, ${city}, ${this.getStateAbbr(state)} ${10000 + i}`,
         city,
@@ -39,6 +42,8 @@ export class MockLeadProvider extends BaseLeadProvider {
         reviewCount: Math.floor(Math.random() * 300),
       });
     }
+
+    console.log(`[MockProvider] Generated ${businesses.length} mock businesses`);
 
     return businesses;
   }

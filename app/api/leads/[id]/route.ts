@@ -25,7 +25,16 @@ export async function GET(
   return withErrorHandling(async () => {
     logRequest('GET', `/api/leads/${params.id}`);
 
-    const lead = await getLead(params.id);
+    // Try to find by database ID first, then by placeId
+    let lead = await getLead(params.id);
+    
+    // If not found by ID, try finding by placeId (for mock/search results)
+    if (!lead) {
+      const { db } = await import('../../../../lib/db');
+      lead = await db.businessLead.findFirst({
+        where: { placeId: params.id }
+      });
+    }
 
     if (!lead) {
       return createErrorResponse('Lead not found', 404, 'NOT_FOUND');

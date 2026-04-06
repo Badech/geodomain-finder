@@ -5,14 +5,20 @@ import { useState } from 'react';
 
 const statusColors: Record<string, string> = {
   available: 'bg-success text-success-foreground',
+  premium: 'bg-purple-500/10 text-purple-600',
   taken: 'bg-destructive/10 text-destructive',
   unknown: 'bg-warning/10 text-warning',
+  error: 'bg-orange-500/10 text-orange-600',
+  invalid: 'bg-gray-500/10 text-gray-600',
 };
 
 const statusLabels: Record<string, string> = {
   available: 'Available',
+  premium: 'Premium',
   taken: 'Taken',
   unknown: 'Unknown',
+  error: 'Error',
+  invalid: 'Invalid',
 };
 
 interface DomainCardProps {

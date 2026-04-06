@@ -9,11 +9,14 @@ import { Switch } from '@/components/ui/switch';
 import { DomainCard } from '@/components/DomainCard';
 import { BusinessCard, BusinessTable } from '@/components/BusinessCard';
 import { useAppState } from '@/hooks/useAppState';
-import { executeSearch } from '@/services/searchService';
+import { executeSearch, executeSearchProgressive, SearchProgressUpdate } from '@/services/searchService';
 import { US_STATES } from '@/data/mockData';
 import { getCitiesForState } from '@/data/usCities';
 import { CityCombobox } from '@/components/CityCombobox';
+import { SearchProgress } from '@/components/SearchProgress';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { sortDomainsByPriority, getDomainStatusCounts, hasUsefulDomains } from '../../lib/utils/domain-sorting';
+import type { DomainOpportunity, BusinessLead } from '@/types';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -29,6 +32,12 @@ export default function Dashboard() {
   const [comOnly, setComOnly] = useState(true);
   const [hasSearched, setHasSearched] = useState(false);
   const [availableCities, setAvailableCities] = useState<string[]>([]);
+  
+  // Progressive search state
+  const [searchProgress, setSearchProgress] = useState<string>('');
+  const [searchStage, setSearchStage] = useState<string>('');
+  const [progressPercent, setProgressPercent] = useState<number>(0);
+  const [useProgressive, setUseProgressive] = useState(true); // Enable progressive by default
 
   useEffect(() => {
     const params = searchParams[0];
@@ -68,6 +77,11 @@ export default function Dashboard() {
 
     setIsSearching(true);
     setHasSearched(true);
+    setSearchProgress('Starting search...');
+    setProgressPercent(0);
+    setDomains([]);
+    setBusinesses([]);
+    
     addSearchHistory({
       id: `sq-${Date.now()}`,
       niche: searchNiche,
@@ -78,26 +92,98 @@ export default function Dashboard() {
     });
 
     try {
-      const result = await executeSearch(searchNiche, searchState, searchCity);
-      setDomains(result.domains);
-      setBusinesses(result.businesses);
-      console.log('Search completed:', {
-        domains: result.domains.length,
-        businesses: result.businesses.length,
-        matches: result.matches.length,
-        executionTime: result.metadata.executionTime + 'ms'
-      });
+      if (useProgressive) {
+        // Use progressive search with real-time updates
+        const tempDomains: DomainOpportunity[] = [];
+        const tempBusinesses: BusinessLead[] = [];
+        
+        await executeSearchProgressive(
+          searchNiche,
+          searchState,
+          searchCity,
+          (update: SearchProgressUpdate) => {
+            // Update progress
+            if (update.status) setSearchProgress(update.status);
+            if (update.progress) setProgressPercent(update.progress);
+            if (update.stage) setSearchStage(update.stage);
+            
+            // Handle different update types
+            switch (update.stage) {
+              case 'domains-generated':
+                if (update.data?.domains) {
+                  const newDomains = update.data.domains.map((d: any) => ({
+                    ...d,
+                    status: d.status || 'unknown' as const,
+                  }));
+                  tempDomains.push(...newDomains);
+                  setDomains([...tempDomains]);
+                }
+                break;
+                
+              case 'domain-checked':
+                if (update.data) {
+                  const idx = tempDomains.findIndex(d => d.domain === update.data.domain);
+                  if (idx !== -1) {
+                    tempDomains[idx] = { ...tempDomains[idx], ...update.data };
+                    setDomains([...tempDomains]);
+                  }
+                }
+                break;
+                
+              case 'businesses-found':
+                if (update.data?.businesses) {
+                  tempBusinesses.push(...update.data.businesses);
+                  setBusinesses([...tempBusinesses]);
+                }
+                break;
+                
+              case 'business-enriched':
+                if (update.data?.id) {
+                  const idx = tempBusinesses.findIndex(b => b.id === update.data.id);
+                  if (idx !== -1) {
+                    tempBusinesses[idx] = { ...tempBusinesses[idx], ...update.data };
+                    setBusinesses([...tempBusinesses]);
+                  }
+                }
+                break;
+                
+              case 'complete':
+                setIsSearching(false);
+                setSearchProgress('');
+                break;
+                
+              case 'error':
+                console.error('Search error:', update.error);
+                setIsSearching(false);
+                setSearchProgress('');
+                break;
+            }
+          }
+        );
+      } else {
+        // Use traditional search (fallback)
+        const result = await executeSearch(searchNiche, searchState, searchCity);
+        setDomains(result.domains);
+        setBusinesses(result.businesses);
+        console.log('Search completed:', {
+          domains: result.domains.length,
+          businesses: result.businesses.length,
+        });
+        setIsSearching(false);
+      }
     } catch (error) {
       console.error('Search failed:', error);
-      // Show error to user but keep UI functional
       setDomains([]);
       setBusinesses([]);
-    } finally {
       setIsSearching(false);
+      setSearchProgress('');
     }
   };
 
-  const availableDomains = domains.filter(d => d.status === 'available');
+  // Sort and filter domains for display
+  const sortedDomains = sortDomainsByPriority(domains);
+  const domainCounts = getDomainStatusCounts(domains);
+  const hasUseful = hasUsefulDomains(domains);
   const topBuyers = businesses.filter(b => b.buyerScore >= 80);
 
   return (
@@ -159,32 +245,26 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* Loading - PHASE 4: Enhanced loading states */}
+        {/* Progressive Loading States */}
         {isSearching && (
           <div className="mt-12 flex flex-col items-center justify-center gap-4">
-            <Loader2 className="h-10 w-10 animate-spin text-primary" />
-            <div className="text-center">
-              <p className="text-sm font-medium text-foreground">Searching...</p>
-              <p className="mt-1 text-xs text-muted-foreground">Generating domains, finding businesses, and enriching data</p>
-            </div>
-            <div className="mt-4 max-w-md space-y-2 text-xs text-muted-foreground">
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse"></div>
-                <span>Checking domain availability</span>
+            {useProgressive && searchProgress ? (
+              <div className="w-full max-w-md">
+                <SearchProgress 
+                  status={searchProgress} 
+                  progress={progressPercent}
+                  stage={searchStage}
+                />
               </div>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.2s' }}></div>
-                <span>Searching local businesses via Google Places</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.4s' }}></div>
-                <span>Extracting contact information</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" style={{ animationDelay: '0.6s' }}></div>
-                <span>Matching domains to prospects</span>
-              </div>
-            </div>
+            ) : (
+              <>
+                <Loader2 className="h-10 w-10 animate-spin text-primary" />
+                <div className="text-center">
+                  <p className="text-sm font-medium text-foreground">Searching...</p>
+                  <p className="mt-1 text-xs text-muted-foreground">Generating domains, finding businesses, and enriching data</p>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -194,7 +274,7 @@ export default function Dashboard() {
             {/* Summary Cards */}
             <div className="mt-6 grid grid-cols-2 gap-3 md:grid-cols-4">
               <SummaryCard icon={<Globe className="h-5 w-5 text-primary" />} label="Domains Generated" value={domains.length} />
-              <SummaryCard icon={<TrendingUp className="h-5 w-5 text-success" />} label="Available" value={availableDomains.length} />
+              <SummaryCard icon={<TrendingUp className="h-5 w-5 text-success" />} label="Available" value={domainCounts.available} />
               <SummaryCard icon={<Users className="h-5 w-5 text-info" />} label="Businesses Found" value={businesses.length} />
               <SummaryCard icon={<Bookmark className="h-5 w-5 text-accent" />} label="Top Buyers" value={topBuyers.length} />
             </div>
@@ -203,15 +283,30 @@ export default function Dashboard() {
             <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
               {/* Domains */}
               <div>
-                <h2 className="font-display text-lg font-bold mb-4">Domain Opportunities</h2>
+                <div className="flex items-center justify-between mb-4">
+                  <h2 className="font-display text-lg font-bold">Domain Opportunities</h2>
+                  {domainCounts.available > 0 && (
+                    <span className="text-xs text-success font-medium">
+                      {domainCounts.available} available
+                    </span>
+                  )}
+                </div>
                 {domains.length === 0 ? (
                   <EmptyState title="No domains found" desc="Try a different niche or location." />
                 ) : (
-                  <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
-                    {domains.map(d => (
-                      <DomainCard key={d.id} domain={d} onSave={toggleSaveDomain} />
-                    ))}
-                  </div>
+                  <>
+                    {!hasUseful && (
+                      <div className="rounded-xl border border-warning/20 bg-warning/5 p-4 mb-4 text-center">
+                        <p className="text-sm font-medium text-warning">No available domains found</p>
+                        <p className="mt-1 text-xs text-muted-foreground">Showing all generated domains below. Most are already taken.</p>
+                      </div>
+                    )}
+                    <div className="space-y-3 max-h-[700px] overflow-y-auto pr-1">
+                      {sortedDomains.map(d => (
+                        <DomainCard key={d.id} domain={d} onSave={toggleSaveDomain} />
+                      ))}
+                    </div>
+                  </>
                 )}
               </div>
 

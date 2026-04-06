@@ -29,6 +29,7 @@ export interface BusinessLeadSeed {
   city: string;
   state: string;
   phone?: string;
+  email?: string; // Optional: Some providers may return email in initial search
   website?: string;
   rating?: number;
   reviewCount?: number;

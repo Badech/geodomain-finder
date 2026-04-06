@@ -41,40 +41,34 @@ export class MockDomainProvider extends BaseDomainProvider {
     status: 'available' | 'taken' | 'premium';
   } {
     // Common/premium words that are always taken
-    const premiumWords = ['google', 'amazon', 'facebook', 'microsoft', 'apple', 'insurance', 'lawyer', 'attorney'];
-    const commonWords = ['best', 'top', 'premium', 'pro', 'expert', 'cheap', 'free'];
+    const premiumWords = ['google', 'amazon', 'facebook', 'microsoft', 'apple'];
     
     // Check for premium keywords (always taken)
     if (premiumWords.some(word => domain.includes(word))) {
       return { available: false, status: 'taken' };
     }
 
-    // Check for common words (likely taken)
-    if (commonWords.some(word => domain.includes(word))) {
-      return { available: false, status: 'taken' };
-    }
-
     // Use hash-based deterministic availability for other domains
     const hash = this.simpleHash(domain);
     
-    // Very short domains (< 10 chars) are more likely taken
-    const domainName = domain.replace('.com', '');
-    if (domainName.length < 10) {
-      return hash % 100 < 70 ? { available: false, status: 'taken' } : { available: true, status: 'available' };
-    }
-
-    // Short domains (10-15 chars) are moderately likely taken
-    if (domainName.length < 15) {
+    // Very short domains (< 8 chars) are more likely taken
+    const domainName = domain.replace('.com', '').replace('.net', '').replace('.org', '');
+    if (domainName.length < 8) {
       return hash % 100 < 50 ? { available: false, status: 'taken' } : { available: true, status: 'available' };
     }
 
-    // Longer domains (15-20 chars) are more likely available
-    if (domainName.length < 20) {
-      return hash % 100 < 35 ? { available: false, status: 'taken' } : { available: true, status: 'available' };
+    // Short domains (8-12 chars) - good availability for demo
+    if (domainName.length < 12) {
+      return hash % 100 < 30 ? { available: false, status: 'taken' } : { available: true, status: 'available' };
     }
 
-    // Very long domains (20+ chars) are usually available
-    return hash % 100 < 20 ? { available: false, status: 'taken' } : { available: true, status: 'available' };
+    // Medium domains (12-18 chars) - very good availability
+    if (domainName.length < 18) {
+      return hash % 100 < 20 ? { available: false, status: 'taken' } : { available: true, status: 'available' };
+    }
+
+    // Long domains (18+ chars) are almost always available
+    return hash % 100 < 10 ? { available: false, status: 'taken' } : { available: true, status: 'available' };
   }
 
   /**
