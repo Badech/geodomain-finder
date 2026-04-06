@@ -106,8 +106,8 @@ export async function POST(request: NextRequest) {
     }
 
     // PHASE 4: Apply request limits for smart enrichment
-    const maxDomains = Math.min(body.maxDomains || 20, 30); // Cap at 30
-    const maxBusinesses = Math.min(body.maxBusinesses || 20, 30); // Cap at 30
+    // const maxDomains = Math.min(body.maxDomains || 20, 30); // Cap at 30
+    // const maxBusinesses = Math.min(body.maxBusinesses || 20, 30); // Cap at 30
 
     // Initialize providers and orchestrator
     const { domainProvider, leadProvider, emailExtractor } = initializeProviders();
@@ -119,8 +119,8 @@ export async function POST(request: NextRequest) {
       city: body.city,
       state: body.state,
       modifiers: body.modifiers,
-      maxDomains,
-      maxBusinesses,
+      // maxDomains,
+      // maxBusinesses,
     });
 
     // PHASE 4: Cache the result

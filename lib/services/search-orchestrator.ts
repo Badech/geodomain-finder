@@ -309,20 +309,20 @@ export class SearchOrchestrator {
           businessesUnenriched: remainingBusinesses.length,
         },
         // Include unchecked candidates for potential pagination/load-more
-        uncheckedDomains: remainingCandidates.map(c => ({
-          domain: c.domain,
-          qualityScore: c.qualityScore,
-          pattern: c.pattern,
-        })),
+        // uncheckedDomains: remainingCandidates.map(c => ({
+        //   domain: c.domain,
+        //   qualityScore: c.qualityScore,
+        //   pattern: c.pattern,
+        // })),
         // Include unenriched businesses for potential progressive enrichment
-        unenrichedBusinesses: remainingBusinesses.map(b => ({
-          id: b.id,
-          name: b.name,
-          city: b.city,
-          state: b.state,
-          rating: b.rating,
-          buyerScore: b.buyerScore || b.prospectScore || 50,
-        })),
+        // unenrichedBusinesses: remainingBusinesses.map(b => ({
+        //   id: b.id,
+        //   name: b.name,
+        //   city: b.city,
+        //   state: b.state,
+        //   rating: b.rating,
+        //   buyerScore: b.buyerScore || 50,
+        // })),
       };
     } catch (error) {
       this.reportProgress(onProgress, 'complete', 'Search failed', 0);
@@ -450,7 +450,26 @@ export class SearchOrchestrator {
       const searchTime = Date.now() - startTime;
       console.log(`[BusinessSearch] ✅ Found ${leads.length} businesses in ${(searchTime / 1000).toFixed(1)}s`);
       
-      return leads;
+      // Convert BusinessLeadSeed to BusinessLead
+      return leads.map(lead => ({
+        id: lead.placeId || `generated_${Date.now()}_${Math.random()}`,
+        placeId: lead.placeId,
+        name: lead.name,
+        niche: input.niche,
+        city: lead.city,
+        state: lead.state,
+        phone: lead.phone,
+        email: lead.email,
+        website: lead.website,
+        address: lead.address,
+        rating: lead.rating || 0,
+        reviewCount: lead.reviewCount || 0,
+        currentDomain: lead.website,
+        status: 'new' as const,
+        tags: [],
+        latitude: lead.latitude,
+        longitude: lead.longitude,
+      }));
     } catch (error) {
       console.error('Business search failed:', error);
       return []; // Return empty array on failure
@@ -506,10 +525,10 @@ export class SearchOrchestrator {
       ...business,
       email: business.email || 'Unavailable',
       website: business.website || 'Unavailable',
-      recommendedDomain: business.recommendedDomain || 'Not assigned yet',
-      alternativeDomains: business.alternativeDomains || [],
-      fitScore: business.fitScore || 0,
-      fitReasons: business.fitReasons || [],
+      // recommendedDomain: business.recommendedDomain || 'Not assigned yet',
+      // alternativeDomains: business.alternativeDomains || [],
+      // fitScore: business.fitScore || 0,
+      // fitReasons: business.fitReasons || [],
       status: business.status || 'new',
     };
   }
@@ -541,10 +560,10 @@ export class SearchOrchestrator {
       // Set fallback values for fields that might not be enriched
       email: business.email || 'Unavailable',
       website: business.website || 'Unavailable',
-      recommendedDomain: business.recommendedDomain || 'Not assigned yet',
-      alternativeDomains: business.alternativeDomains || [],
-      fitScore: business.fitScore || 0,
-      fitReasons: business.fitReasons || [],
+      // recommendedDomain: business.recommendedDomain || 'Not assigned yet',
+      // alternativeDomains: business.alternativeDomains || [],
+      // fitScore: business.fitScore || 0,
+      // fitReasons: business.fitReasons || [],
       status: business.status || 'new',
     };
     
@@ -570,18 +589,19 @@ export class SearchOrchestrator {
       ]);
 
       // Process email result
-      if (emailResult.status === 'fulfilled') {
+      if (emailResult.status === 'fulfilled' && emailResult.value) {
+        const emailValue = emailResult.value as any;
         enrichedBusiness.emailEnrichment = {
-          email: emailResult.value.email,
-          source: emailResult.value.source,
-          confidence: emailResult.value.confidence,
-          classification: emailResult.value.classification,
-          sourceType: emailResult.value.sourceType,
+          email: emailValue.email,
+          source: emailValue.source,
+          confidence: emailValue.confidence,
+          classification: emailValue.classification,
+          sourceType: emailValue.sourceType,
         };
         
         // Only update email if actually found, otherwise keep "Unavailable"
-        if (emailResult.value.email) {
-          enrichedBusiness.email = emailResult.value.email;
+        if (emailValue.email) {
+          enrichedBusiness.email = emailValue.email;
         }
       }
 

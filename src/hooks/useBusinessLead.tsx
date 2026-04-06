@@ -20,7 +20,7 @@ export function useBusinessLead(id: string | undefined) {
     }
 
     // First, try to find in in-memory state (from recent search)
-    const inMemory = businesses.find(b => b.id === id || b.placeId === id);
+    const inMemory = businesses.find(b => b.id === id);
     if (inMemory) {
       console.log('[useBusinessLead] Found in memory:', id);
       setLead(inMemory);

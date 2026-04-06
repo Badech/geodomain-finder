@@ -177,7 +177,7 @@ export function BusinessTable({ leads, onViewDetail }: { leads: BusinessLead[]; 
                 </span>
               </td>
               <td className="px-4 py-3 text-right">
-                <a href={`/prospect/${lead.placeId || lead.id}`} target="_blank" rel="noopener noreferrer">
+                <a href={`/prospect/${lead.id}`} target="_blank" rel="noopener noreferrer">
                   <Button size="sm" variant="ghost" className="text-xs">
                     <ExternalLink className="h-3.5 w-3.5" />
                   </Button>

@@ -56,8 +56,8 @@ export async function POST(request: NextRequest) {
             city: input.city,
             state: input.state,
             modifiers: input.modifiers?.split(',').map(m => m.trim()),
-            maxResults: 20,
-          });
+            mode: 'expanded',
+          }).slice(0, 30); // Take first 30 for stream response
           
           // Add required fields for DomainOpportunity type
           const domainsWithIds = domainCandidates.map((candidate, idx) => ({
@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
                 niche: query,
                 city: input.city,
                 state: input.state,
-                limit: 30, // Limit per query to avoid overwhelming
+                maxResults: 30, // Limit per query to avoid overwhelming
               })
             )
           );
